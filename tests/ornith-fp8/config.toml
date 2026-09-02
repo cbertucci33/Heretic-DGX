@@ -1,0 +1,32 @@
+model = "/mnt/c/Models/Sohailhosseini/Ornith-1.5-9B-FP8"
+dtypes = ["auto"]
+quantization = "none"
+device_map = { "" = 0 }
+offload_outputs_to_cpu = true
+batch_size = 1
+max_response_length = 8
+response_prefix = ""
+orthogonalize_direction = true
+row_normalization = "pre"
+n_trials = 1
+n_startup_trials = 1
+seed = 12345
+max_shard_size = "5GB"
+export_strategy = "adapter"
+checkpoint_action = "restart"
+trial_index = 0
+model_action = "save"
+save_directory = "adapter-output"
+system_prompt = "You are a helpful assistant."
+scorers = [
+  { plugin = "heretic.scorers.kl_divergence.KLDivergence", optimization = "minimize" },
+]
+
+[good_prompts]
+dataset = "good-prompts.txt"
+
+[bad_prompts]
+dataset = "bad-prompts.txt"
+
+[scorer.KLDivergence.prompts]
+dataset = "kl-prompts.txt"

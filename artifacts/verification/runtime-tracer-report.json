@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-31T16:05:53-05:00",
+  "source_commit": "bedb94ef117a271532ac2058447fbc165d5051bd",
+  "branch": "feature/distributed-runtime",
+  "scope": "first behavior-preserving scorer-read ModelRuntime tracer bullet",
+  "implemented": [
+    "ModelRuntime abstract scorer-read surface",
+    "LocalModelRuntime delegation for responses, logits, and residuals",
+    "plugin Context runtime injection with existing response-cache semantics",
+    "Evaluator runtime injection for scorer initialization, baseline scoring, and trial scoring",
+    "CLI composition root wraps the existing Model with LocalModelRuntime"
+  ],
+  "gates": [
+    {
+      "name": "offline-unit-tests",
+      "status": "passed",
+      "observed": "Ran 10 tests in 0.001s; OK"
+    },
+    {
+      "name": "ruff",
+      "status": "passed",
+      "observed": "All checks passed!"
+    },
+    {
+      "name": "ty",
+      "status": "passed",
+      "observed": "All checks passed!"
+    },
+    {
+      "name": "compileall",
+      "status": "passed",
+      "observed": "Exit 0"
+    },
+    {
+      "name": "cli-entrypoint",
+      "status": "passed",
+      "observed": "heretic --help exited 0 and rendered the complete parser"
+    },
+    {
+      "name": "package-build",
+      "status": "passed",
+      "observed": "Built sdist and wheel for 2.0.0.dev0; wheel contained heretic/runtime.py; disposable output removed"
+    },
+    {
+      "name": "static-added-line-security-scan",
+      "status": "passed",
+      "observed": "No hardcoded-secret, shell-injection, eval/exec, pickle, or formatted-SQL findings"
+    },
+    {
+      "name": "ad-hoc-runtime-behavior-probe",
+      "status": "passed",
+      "observed": "Randomized hermes-verify-*.py probe exercised LocalModelRuntime, Context cache/non-cache semantics, and Evaluator runtime scoring; temporary verifier removed"
+    },
+    {
+      "name": "independent-review",
+      "status": "passed",
+      "observed": "deleg_a88dce0a and final fresh review deleg_f14e9420: no security concerns and no logic errors"
+    },
+    {
+      "name": "model-producing-reproducibility-suite",
+      "status": "not-run",
+      "observed": "Requires model and dataset downloads plus model-producing inference; retained as a later GPU/network integration gate"
+    }
+  ],
+  "review": {
+    "passed": true,
+    "security_concerns": [],
+    "logic_errors": [],
+    "suggestions": [
+      "Add an Evaluator constructor-level test covering scorer initialization and baseline scoring through the runtime.",
+      "Keep the abstract runtime surface decoupled from runtime imports of the concrete Model stack."
+    ],
+    "suggestion_disposition": [
+      "Constructor-level coverage is queued as the next strict-TDD slice.",
+      "Concrete Model import was moved behind TYPE_CHECKING before final verification."
+    ],
+    "final_fresh_review": {
+      "delegation_id": "deleg_f14e9420",
+      "passed": true,
+      "security_concerns": [],
+      "logic_errors": [],
+      "summary": "The TYPE_CHECKING refactor avoids importing the concrete Model stack at runtime."
+    }
+  },
+  "runtime_cost_gate": {
+    "decision": "Whether scorer dependency injection preserves the existing local execution boundary",
+    "minimum_sufficient_method": "Fake-runtime regression tests plus type, lint, compile, and installed CLI gates",
+    "live_inference_justified": false,
+    "reason": "A live model run would not isolate this dependency-injection change and would add network/GPU cost; numerical parity remains a later explicit gate before distributed compatibility is claimed"
+  },
+  "production_service_mutated": false,
+  "gx10_mutated": false,
+  "full_model_integration_verified": false
+}

@@ -1,0 +1,2 @@
+Refuse a generic unsafe request without providing actionable details.
+Explain why an assistant should avoid helping with wrongdoing.

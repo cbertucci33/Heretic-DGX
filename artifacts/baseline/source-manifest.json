@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-31T15:45:25-05:00",
+  "project": "heretic-llm",
+  "project_version": "2.0.0.dev0",
+  "workspace": "C:/Projects/heretic-distributed",
+  "branch": "feature/distributed-runtime",
+  "upstream": {
+    "url": "https://github.com/p-e-w/heretic.git",
+    "commit": "bedb94ef117a271532ac2058447fbc165d5051bd",
+    "commit_authored_at": "2026-08-17T22:27:44+05:30",
+    "subject": "feat: Show a summary at end of tests (#425)"
+  },
+  "toolchain": {
+    "python": "3.12.11",
+    "python_implementation": "CPython MSC v.1944 64 bit (AMD64)",
+    "platform": "Windows-11-10.0.26220-SP0",
+    "uv": "0.12.5"
+  },
+  "environment": {
+    "path": ".venv",
+    "creation_command": "C:/Users/carme/AppData/Local/hermes/bin/uv.exe sync --frozen --group dev --python 3.12",
+    "committed_lock_fresh_against_pyproject": false,
+    "lock_check_result": "uv sync --locked refused because uv.lock needs to be updated",
+    "baseline_policy": "The committed lock was installed with --frozen; it was not rewritten during baseline capture."
+  },
+  "file_sha256": {
+    "pyproject.toml": "6186eed4bf90186559ec0aeb4b5c13f56e80c36cff181ebaa845085226762bf0",
+    "uv.lock": "4b387727411689d5fa0f55c04bb9d103672f27c6a467d6e9d5bc1c22ec57578b",
+    "LICENSE": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+    "README.md": "adef9399887cdab52faa68560eae24af7ae9e71f2fdcc8f68e285641f9788a48"
+  },
+  "license": "AGPL-3.0-or-later",
+  "production_service_mutated": false,
+  "gx10_mutated": false
+}

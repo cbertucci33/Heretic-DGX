@@ -1,0 +1,15 @@
+* text eol=lf
+
+# Immutable archives and binary assets must never be newline-normalized
+*.tar binary
+*.tar.gz binary
+*.tgz binary
+*.zip binary
+*.gz binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary

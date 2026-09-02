@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-31T16:54:08-05:00",
+  "source_commit": "6531a96a03c065dd6997f6774ba43590841f8cf7",
+  "fixture": "tests/qwen2.5",
+  "model": {
+    "id": "tiny-random/qwen2.5",
+    "revision": "7a6a3128ee4137a248d6d1582824592b87a81647"
+  },
+  "environment": {
+    "host": "Alien",
+    "os": "Windows 11",
+    "python": "3.12.11",
+    "torch": "2.13.0+cpu",
+    "cuda_available_to_torch": false,
+    "physical_gpu": "NVIDIA GeForce RTX 5080",
+    "execution_device": "CPU"
+  },
+  "configured_workload": {
+    "seed": 12345,
+    "batch_size": 2,
+    "max_response_length": 10,
+    "trials": 2,
+    "row_normalization": "pre",
+    "export_strategy": "merge",
+    "selected_trial_index": 0,
+    "good_prompt_count": 5,
+    "bad_prompt_count": 5,
+    "keyword_rate_prompt_count": 5,
+    "kl_divergence_prompt_count": 5
+  },
+  "observed": {
+    "model_loaded": true,
+    "lora_initialized": true,
+    "transformer_layer_count": 4,
+    "baseline_keyword_rate": "0/5",
+    "trial_1_kl_divergence": 0.0005,
+    "trial_2_kl_divergence": 0.0006,
+    "optimization_finished": true,
+    "selected_trial_restored": true,
+    "merged_model_saved": true
+  },
+  "hash_verification": {
+    "all_accepted": true,
+    "files": {
+      "chat_template.jinja": "8aa40ce145adb73cb3a75194dc0224702a95850ec5275cabb728496bbd749fc6",
+      "config.json": "e8f2fcd2681eb92233c0902866441f79a207b235f0b03364d41ebf8c53df62a0",
+      "generation_config.json": "3fec6d7004e5ae311864de130b62e32dac87569874c91b3fe9c46e9309345c1c",
+      "model.safetensors": "bd86541d817978c896bd3579e69ae6d41b6382eaf1646accf83d6feb16acb703",
+      "tokenizer.json": "f7f96da3a872b5e901575b2067c744ad336c3a3d77a21584d20024557b1bd7f0",
+      "tokenizer_config.json": "154e5ff1e7c152d964edf30da854ea62465c767719ac8e97e58babf2d4fa9079"
+    },
+    "accepted_sources": [
+      "SHA256SUMS.windows",
+      "SHA256SUMS.ci",
+      "SHA256SUMS.ci2"
+    ]
+  },
+  "launcher_notes": {
+    "non_pty_attempt": "The model and both trials completed, then eager questionary construction failed with NoConsoleScreenBufferError before export.",
+    "pty_retry": "The model, both trials, selected-trial restore, merge, export, and all hash checks completed.",
+    "process_exit_gate": "unverified: the underlying PID disappeared after export, but the Hermes PTY tracker remained stale and was terminated after EOF did not close it"
+  },
+  "conclusion": {
+    "selected_real_model_fixture_passed": true,
+    "local_model_runtime_artifact_parity_verified": true,
+    "all_upstream_model_fixtures_verified": false,
+    "gpu_runtime_verified": false,
+    "distributed_runtime_verified": false,
+    "gx10_mutated": false,
+    "production_service_mutated": false
+  }
+}

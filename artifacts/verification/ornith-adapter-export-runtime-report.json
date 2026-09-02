@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-09-01T09:10:28-05:00",
+  "repository": "C:/Projects/heretic-distributed",
+  "branch": "feature/distributed-runtime",
+  "base_commit": "0fd9b383523fe524c4975004d8798f7c026d184e",
+  "tested_source_tree_before_report": "bd6248fc3ba31dc72de6e78c2760eb3026b9c83a",
+  "pinned_upstream_oracle": "bedb94ef117a271532ac2058447fbc165d5051bd",
+  "scope": "Route adapter-only export through ModelRuntime while preserving the existing PEFT save call, retain an executable fail-closed Ornith FP8 qualification fixture, and support Transformers mapping and config-object quantization metadata forms.",
+  "behavior_preservation": {
+    "old_receiver": "model.model",
+    "new_receiver": "runtime",
+    "save_call_count_preserved": true,
+    "positional_arguments_identical_by_ast": true,
+    "keyword_arguments_identical_by_ast": true,
+    "local_mapping": "LocalModelRuntime.save_adapter delegates exactly once to Model.model.save_pretrained",
+    "merged_export_changed": false,
+    "adapter_math_changed": false,
+    "cli_defaults_changed": false
+  },
+  "tdd": {
+    "adapter_delegation_test": "LocalModelRuntimeTests.test_delegates_adapter_save_with_exact_arguments",
+    "quantization_metadata_red_observation": "AttributeError: module verify_ornith_load had no get_quant_method attribute",
+    "quantization_metadata_green_tests": [
+      "QuantizationMetadataTests.test_reads_quant_method_from_mapping",
+      "QuantizationMetadataTests.test_reads_quant_method_from_config_object",
+      "QuantizationMetadataTests.test_returns_none_when_quantization_metadata_is_absent"
+    ],
+    "reviewer_blocker_red_green_tests": [
+      "OrnithIdentityValidationTests.test_requires_exact_ornith_fp8_identity",
+      "OrnithWeightValidationTests.test_requires_exact_weight_size_and_sha256"
+    ]
+  },
+  "native_verification": {
+    "unit_tests_passed": 27,
+    "unit_tests_failed": 0,
+    "ruff": "passed",
+    "ty": "passed",
+    "compileall": "passed",
+    "cli_help": "passed"
+  },
+  "wsl_verification": {
+    "mirror": "/home/cb/work/heretic-ornith-wsl",
+    "python": "3.12.3",
+    "torch": "2.13.0+cu130",
+    "cuda_build": "13.0",
+    "gpu": "NVIDIA GeForce RTX 5080",
+    "compute_capability": [12, 0],
+    "cuda_smoke_sum": 56.0,
+    "unit_tests_passed": 27,
+    "unit_tests_failed": 0,
+    "ruff": "passed",
+    "ty": "passed",
+    "compileall": "passed",
+    "cli_help": "passed",
+    "sdist_and_wheel": "passed",
+    "wheel_runtime_content": "passed",
+    "terminal_marker": "wsl_verification_passed=true"
+  },
+  "ornith_fp8_load": {
+    "model": "Sohailhosseini/Ornith-1.5-9B-FP8",
+    "revision": "d30f70d5d62c0b9d5a1d7f015b37513fc7aa0bdc",
+    "model_class": "Qwen3_5ForConditionalGeneration",
+    "model_type": "qwen3_5",
+    "quant_method": "compressed-tensors",
+    "weight_size_bytes": 11910387016,
+    "weight_sha256": "bc0f5fd15250c26165470e6b2853721bb1ac2ad7c58d3f54ebbdd88019e1ddbe",
+    "parameter_devices": {
+      "cuda:0": 960
+    },
+    "parameter_dtypes": {
+      "torch.bfloat16": 760,
+      "torch.float8_e4m3fn": 200
+    },
+    "cuda_allocated_bytes": 11910346240,
+    "cuda_reserved_bytes": 11930697728,
+    "cuda_peak_allocated_bytes": 11910346752,
+    "cpu_offload": false,
+    "load_only_verification": "passed with executable exact size, SHA-256, model class/type, quantization, CUDA inventory, and dtype inventory gates",
+    "gpu_memory_reclaimed_after_exit": true
+  },
+  "security_and_privacy": {
+    "obvious_secret_pattern_matches": 0,
+    "hidden_fallbacks_added": false,
+    "remote_code_trust_changed": false
+  },
+  "qualification_boundary": {
+    "Alien_WSL2_x86_64_CUDA": "verified for the tested source tree",
+    "Ornith_FP8_single_GPU_load": "verified",
+    "adapter_export_runtime_delegation": "verified by exact-argument unit test",
+    "GX10_ARM64_GB10": "not run",
+    "distributed_protocol": "not implemented",
+    "two_node_NCCL": "not run",
+    "Laguna_FP8": "not run"
+  }
+}

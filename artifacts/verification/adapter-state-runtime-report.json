@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-31T23:25:07-05:00",
+  "repository": "C:/Projects/heretic-distributed",
+  "branch": "feature/distributed-runtime",
+  "base_commit": "84c598e181f4b9bc53967f81bc13995e7c75473e",
+  "pinned_upstream_oracle": "bedb94ef117a271532ac2058447fbc165d5051bd",
+  "tested_source_tree": "779ba392fb37cc593f4581deed2a150eec8a5fe8",
+  "scope": "Move existing local reset and abliteration orchestration calls behind ModelRuntime without changing local behavior",
+  "tdd": {
+    "red_test": "LocalModelRuntimeTests.test_delegates_reset_then_abliteration_with_exact_arguments",
+    "red_observation": "AttributeError: LocalModelRuntime had no reset_model attribute",
+    "green_tests": [
+      "LocalModelRuntimeTests.test_delegates_reset_then_abliteration_with_exact_arguments",
+      "LocalModelRuntimeTests.test_propagates_mutation_exceptions_unchanged"
+    ]
+  },
+  "production_mapping": {
+    "ModelRuntime.reset_model": "Model.reset_model",
+    "ModelRuntime.abliterate": "Model.abliterate with the original residual_directions tensor, direction_index, and parameters mapping",
+    "changed_orchestration_call_sites": [
+      "evaluate-model reset",
+      "per-trial reset then abliterate",
+      "selected-trial restore reset then abliterate"
+    ],
+    "still_concrete_model_owned": [
+      "model loading",
+      "layer and component discovery",
+      "adapter and merged export",
+      "chat",
+      "benchmark"
+    ],
+    "changed_randomness_or_adapter_math": false,
+    "hidden_fallbacks_or_swallowed_exceptions": false,
+    "test_or_environment_conditioned_production_branches": false
+  },
+  "native_verification": {
+    "unit_tests": {
+      "passed": true,
+      "count": 21
+    },
+    "ruff": "passed",
+    "ty": "passed",
+    "compileall": "passed",
+    "cli_help": "passed",
+    "sdist_and_wheel": "passed",
+    "wheel_runtime_content": "passed",
+    "disposable_build_removed": true
+  },
+  "wsl_verification": {
+    "isolated_clone": "/home/cb/work/heretic-adapter-state-isolated",
+    "exact_source_tree": "779ba392fb37cc593f4581deed2a150eec8a5fe8",
+    "python_optimize": "1",
+    "unit_tests": {
+      "passed": true,
+      "count": 21
+    },
+    "ruff": "passed",
+    "ty": "passed",
+    "compileall": "passed",
+    "cli_help": "passed",
+    "sdist_and_wheel": "passed",
+    "wheel_runtime_content": "passed",
+    "cuda_smoke": "passed",
+    "terminal_marker": "wsl_verification_passed=true"
+  },
+  "real_application_fixture": {
+    "invocation": "C:/Projects/heretic-distributed/.venv/Scripts/heretic.exe",
+    "working_directory": "C:/Projects/heretic-distributed/tests/qwen2.5",
+    "model": "tiny-random/qwen2.5",
+    "model_revision": "7a6a3128ee4137a248d6d1582824592b87a81647",
+    "seed": 12345,
+    "trials": 2,
+    "observed_sequence": [
+      "model load",
+      "scorer initialization and baseline",
+      "trial reset",
+      "trial abliteration",
+      "trial evaluation",
+      "selected-trial reset and restoration",
+      "LoRA merge",
+      "post-merge reset and restoration",
+      "merged-model export"
+    ],
+    "final_observed_metric": {
+      "keywords": "0/5",
+      "kl_divergence": 0.0006
+    },
+    "export_message_observed": "Model saved to model."
+  },
+  "export_hash_verification": {
+    "all_accepted": true,
+    "expected_file_count": 6,
+    "actual_file_count": 6,
+    "matched_file_count": 6,
+    "missing_files": [],
+    "extra_files": [],
+    "accepted_hash_sources": [
+      "tests/qwen2.5/SHA256SUMS.windows",
+      "tests/qwen2.5/SHA256SUMS.ci",
+      "tests/qwen2.5/SHA256SUMS.ci2"
+    ]
+  },
+  "process_lifecycle": {
+    "heretic_process_present_after_export": false,
+    "pty_tracker_closed_naturally": false,
+    "action": "The stale Hermes PTY tracker was terminated only after the real Heretic process was confirmed absent.",
+    "claim": "Application workflow and artifact parity passed; natural PTY tracker closure is not claimed."
+  },
+  "cleanup": {
+    "generated_model_directory_removed": true,
+    "temporary_patch_removed": true,
+    "temporary_ad_hoc_verifiers_left": false,
+    "isolated_wsl_clone_retained_for_independent_review": true
+  },
+  "qualification_boundary": {
+    "default_local_tiny_model_path": "verified",
+    "Alien_WSL2_x86_64_CUDA_workflow": "verified for exact tested source tree",
+    "all_upstream_models": "not run",
+    "distributed_protocol": "not implemented or qualified by this slice",
+    "GX10_ARM64_GB10_FP8_two_node": "not qualified",
+    "DeepSeek_or_GX10_mutation": false
+  },
+  "conclusion": "The exact existing local reset and abliteration operations now pass through ModelRuntime without changing argument identity, ordering, exception propagation, adapter math, or the accepted tiny-Qwen export. Target-hardware and distributed behavior remain unqualified."
+}

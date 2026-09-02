@@ -1,0 +1,23 @@
+{
+  "archive_scan": {
+    "members": 104,
+    "path": "provenance/v25-breakpoint/heretic-dgx-exact-tree-v24.tar.gz",
+    "scanned_regular_members": 104,
+    "unsafe_members": []
+  },
+  "file_count_before_audit_record": 127,
+  "files_over_100MiB": [],
+  "git_diff_check": {
+    "source_test_bytes_modified": false,
+    "status": "KNOWN_INHERITED_WHITESPACE_ONLY",
+    "findings": [
+      "tests/README.md:7 trailing whitespace",
+      "tests/README.md:53 trailing whitespace"
+    ]
+  },
+  "model_weight_files": [],
+  "secret_findings": [],
+  "status": "PASS_WITH_DOCUMENTED_INHERITED_WHITESPACE",
+  "symlinks": [],
+  "total_bytes_before_audit_record": 2304366
+}

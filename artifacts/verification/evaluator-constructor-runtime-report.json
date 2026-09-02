@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-31T20:35:24-05:00",
+  "base_commit": "6df56af88dde1ccc9516c5dfab3b35b0fd28a974",
+  "branch": "feature/distributed-runtime",
+  "scope": "Evaluator constructor-time runtime characterization",
+  "change_class": "test_and_contract_only",
+  "production_code_changed": false,
+  "finding": {
+    "status": "existing_behavior_confirmed",
+    "summary": "Evaluator construction already routes scorer initialization and baseline scoring through fresh Context objects backed by the injected ModelRuntime.",
+    "implementation_correction_required": false
+  },
+  "characterized_behavior": {
+    "plugin_loading": "mocked at the evaluator load_plugin boundary",
+    "scorer_init_context": "fresh Context backed by injected runtime",
+    "baseline_context": "separate fresh Context backed by the same injected runtime",
+    "runtime_calls": [
+      {
+        "phase": "scorer_init",
+        "prompt_user": "initialize",
+        "skip_special_tokens": true
+      },
+      {
+        "phase": "constructor_baseline",
+        "prompt_user": "constructor-baseline",
+        "skip_special_tokens": true
+      }
+    ],
+    "baseline_score": {
+      "name": "ConstructorRecordingScorer",
+      "value": 2.0,
+      "rich_display": "runtime:constructor-baseline",
+      "md_display": "runtime:constructor-baseline"
+    }
+  },
+  "verification": {
+    "focused_native_test": "passed",
+    "native_unit_tests": {
+      "status": "passed",
+      "count": 16
+    },
+    "native_ruff": "passed",
+    "native_ty": "passed",
+    "native_compileall": "passed",
+    "native_cli_help": "passed",
+    "native_package_build": "passed",
+    "native_wheel_contains_runtime": true,
+    "native_disposable_build_removed": true,
+    "independent_ad_hoc_constructor_probe": "passed",
+    "temporary_probe_removed": true,
+    "wsl": {
+      "status": "passed",
+      "isolated_clone": "/home/cb/work/heretic-evaluator-isolated",
+      "base_commit": "6df56af88dde1ccc9516c5dfab3b35b0fd28a974",
+      "tested_source_tree": "029f6e154aad291a47b23d1a8eff79a44a485752",
+      "python_optimize": "1",
+      "unit_test_count": 16,
+      "ruff": "passed",
+      "ty": "passed",
+      "compileall": "passed",
+      "cli_help": "passed",
+      "package_build": "passed",
+      "wheel_contains_runtime": true,
+      "terminal_marker": "wsl_verification_passed=true"
+    }
+  },
+  "qualification_boundary": {
+    "verified": [
+      "native Windows CPU test and package path",
+      "WSL2 x86_64 RTX 5080 CUDA development path",
+      "constructor-time scorer runtime injection"
+    ],
+    "not_verified": [
+      "GX10 ARM64",
+      "GB10 unified memory",
+      "Laguna FP8",
+      "one-rank capacity",
+      "two-node transport"
+    ]
+  }
+}

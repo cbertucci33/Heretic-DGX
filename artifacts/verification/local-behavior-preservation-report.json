@@ -1,0 +1,151 @@
+{
+  "schema_version": 2,
+  "captured_at": "2026-08-31T21:19:51-05:00",
+  "repository": "C:/Projects/heretic-distributed",
+  "branch": "feature/distributed-runtime",
+  "base_commit": "44da31cc12d902cb1c097e194eb59e860fdcb2c1",
+  "tested_source_tree": "17100b29480f3da9dc04a9ebe80e757a31549198",
+  "pinned_upstream_oracle": "bedb94ef117a271532ac2058447fbc165d5051bd",
+  "scope": "Default local Heretic behavior and stock constructor compatibility after introducing ModelRuntime",
+  "review_triggered_correction": {
+    "finding": "An independent fail-closed review found that direct Evaluator(settings, model) and Context(settings, model) callers and legacy model attributes were incompatible.",
+    "disposition": "The compatibility drift was treated as blocking. The earlier evidence-only tree was not committed.",
+    "red": {
+      "tests": [
+        "ContextRuntimeTests.test_accepts_stock_model_constructor_and_preserves_model_attribute",
+        "EvaluatorRuntimeTests.test_accepts_stock_model_constructor_and_preserves_model_attribute"
+      ],
+      "observed": "Both raised TypeError for unexpected keyword argument model."
+    },
+    "green": {
+      "stock_keyword_constructors": "passed",
+      "stock_positional_constructors": "passed",
+      "legacy_context_model_attribute": "preserved",
+      "legacy_evaluator_model_attribute": "preserved",
+      "runtime_keyword_constructor": "passed"
+    }
+  },
+  "production_diff": {
+    "paths_from_pinned_upstream": [
+      "src/heretic/evaluator.py",
+      "src/heretic/main.py",
+      "src/heretic/plugin.py",
+      "src/heretic/runtime.py"
+    ],
+    "summary": "The default CLI wraps the existing concrete Model in LocalModelRuntime. Stock Evaluator and Context model constructors remain accepted and create the same adapter internally. Scorer reads delegate one-for-one to the same existing Model methods. Trial mutation, model loading, chat, merge, export, and benchmarking remain on the existing Model paths.",
+    "test_or_environment_conditioned_branches_found": false,
+    "changed_randomness_or_model_math_found": false,
+    "swallowed_exceptions_or_hidden_fallbacks_found": false
+  },
+  "stock_api_compatibility": {
+    "Evaluator_positional_model": true,
+    "Evaluator_model_keyword": true,
+    "Evaluator_model_attribute_same_object": true,
+    "Context_positional_model": true,
+    "Context_model_keyword": true,
+    "Context_private_model_attribute_same_object": true,
+    "additive_runtime_keyword": true
+  },
+  "static_runtime_mapping": {
+    "get_responses": "Model.get_responses_batched with unchanged skip_special_tokens value",
+    "get_logits": "Model.get_logits_batched",
+    "get_residuals": "Model.get_residuals_batched",
+    "get_residuals_mean": "Model.get_residuals_mean"
+  },
+  "native_verification": {
+    "unit_tests": {
+      "passed": true,
+      "count": 19
+    },
+    "focused_compatibility_tests": "passed",
+    "independent_ad_hoc_stock_compatibility_probe": "passed; temporary verifier removed",
+    "ruff": "passed",
+    "ty": "passed",
+    "compileall": "passed",
+    "cli_help": "passed",
+    "sdist_and_wheel": "passed",
+    "wheel_runtime_files_present": true,
+    "disposable_build_removed": true
+  },
+  "wsl_verification": {
+    "isolated_clone": "/home/cb/work/heretic-compat-isolated",
+    "source_tree": "17100b29480f3da9dc04a9ebe80e757a31549198",
+    "python_optimize": "1",
+    "unit_tests": {
+      "passed": true,
+      "count": 19
+    },
+    "ruff": "passed",
+    "ty": "passed",
+    "compileall": "passed",
+    "cli_help": "passed",
+    "sdist_and_wheel": "passed",
+    "wheel_runtime_content": "passed",
+    "cuda_smoke": "passed",
+    "terminal_marker": "wsl_verification_passed=true"
+  },
+  "real_application_fixture": {
+    "invocation": "C:/Projects/heretic-distributed/.venv/Scripts/heretic.exe",
+    "working_directory": "C:/Projects/heretic-distributed/tests/qwen2.5",
+    "model": "tiny-random/qwen2.5",
+    "model_revision": "7a6a3128ee4137a248d6d1582824592b87a81647",
+    "seed": 12345,
+    "trials": 2,
+    "observed_operations": [
+      "model load",
+      "scorer initialization and evaluation",
+      "adapter reset",
+      "abliteration",
+      "selected-trial restore",
+      "LoRA merge",
+      "merged-model export"
+    ],
+    "final_observed_metric": {
+      "keywords": "0/5",
+      "kl_divergence": 0.0006
+    },
+    "export_message_observed": "Model saved to model."
+  },
+  "export_hash_verification": {
+    "all_accepted": true,
+    "expected_file_count": 6,
+    "actual_file_count": 6,
+    "missing_files": [],
+    "extra_files": [],
+    "files": {
+      "chat_template.jinja": "8aa40ce145adb73cb3a75194dc0224702a95850ec5275cabb728496bbd749fc6",
+      "config.json": "e8f2fcd2681eb92233c0902866441f79a207b235f0b03364d41ebf8c53df62a0",
+      "generation_config.json": "3fec6d7004e5ae311864de130b62e32dac87569874c91b3fe9c46e9309345c1c",
+      "model.safetensors": "bd86541d817978c896bd3579e69ae6d41b6382eaf1646accf83d6feb16acb703",
+      "tokenizer.json": "f7f96da3a872b5e901575b2067c744ad336c3a3d77a21584d20024557b1bd7f0",
+      "tokenizer_config.json": "154e5ff1e7c152d964edf30da854ea62465c767719ac8e97e58babf2d4fa9079"
+    },
+    "accepted_hash_sources": [
+      "tests/qwen2.5/SHA256SUMS.windows",
+      "tests/qwen2.5/SHA256SUMS.ci",
+      "tests/qwen2.5/SHA256SUMS.ci2"
+    ]
+  },
+  "process_lifecycle": {
+    "heretic_process_present_after_export": false,
+    "pty_tracker_closed_naturally": false,
+    "action": "The stale Hermes PTY tracker was terminated after the real Heretic process was absent.",
+    "claim": "Application workflow and artifact parity passed; a clean PTY tracker closure is not claimed."
+  },
+  "behavior_preservation_contract": {
+    "intended_behavior_is_acceptance_oracle": true,
+    "tests_must_follow_intended_behavior": true,
+    "production_bypass_for_tests_or_blockers_allowed": false,
+    "intentional_behavior_change_requires_explicit_scope_and_review": true
+  },
+  "qualification_boundary": {
+    "default_local_cpu_path": "verified with the selected Qwen fixture",
+    "stock_direct_constructor_compatibility": "restored and covered for positional and model keyword calls",
+    "private_external_internals_beyond_Evaluator_model_and_Context_private_model": "not claimed as a public compatibility surface",
+    "all_upstream_model_fixtures": "not run",
+    "WSL_CUDA_workflow": "qualified for the exact corrected x86_64 source tree",
+    "GX10_ARM64_GB10_FP8_two_node": "not qualified",
+    "DeepSeek_or_GX10_mutation": false
+  },
+  "conclusion": "The originally detected constructor compatibility drift was corrected rather than documented away. Current evidence supports stock constructor compatibility and behavior preservation for the default local runtime and selected real Qwen workflow. Unrun hardware or model combinations remain unqualified."
+}

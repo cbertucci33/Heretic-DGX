@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-31T19:02:43-05:00",
+  "base_commit": "682ac5f3016d5bef03ff05e64be4ad47dd2c344c",
+  "branch": "feature/distributed-runtime",
+  "scope": "ModelRuntime residual-mean local capability",
+  "tdd": {
+    "red": {
+      "test": "tests.test_runtime.LocalModelRuntimeTests.test_delegates_residual_mean",
+      "observed": "AttributeError: LocalModelRuntime has no attribute get_residuals_mean"
+    },
+    "green": {
+      "test": "tests.test_runtime.LocalModelRuntimeTests.test_delegates_residual_mean",
+      "observed": "Ran 1 test; OK"
+    }
+  },
+  "implemented": [
+    "ModelRuntime.get_residuals_mean abstract operation",
+    "LocalModelRuntime delegates get_residuals_mean to the existing Model",
+    "runtime contract documents residual mean in the implemented subset"
+  ],
+  "execution_environments": [
+    "Windows 11 x86_64, Python 3.12.11, PyTorch 2.13.0+cpu",
+    "WSL2 Ubuntu 24.04.4 x86_64, Python 3.12.3, PyTorch 2.13.0+cu130, RTX 5080"
+  ],
+  "gates": [
+    {
+      "name": "offline-unit-tests",
+      "status": "passed",
+      "observed": "Ran 11 tests in 0.001s; OK"
+    },
+    {
+      "name": "ruff",
+      "status": "passed",
+      "observed": "All checks passed!"
+    },
+    {
+      "name": "ty",
+      "status": "passed",
+      "observed": "All checks passed!"
+    },
+    {
+      "name": "compileall-and-cli",
+      "status": "passed",
+      "observed": "compileall and installed heretic --help exited 0"
+    },
+    {
+      "name": "package-build",
+      "status": "passed",
+      "observed": "sdist and wheel built; wheel contains heretic/runtime.py; disposable output removed"
+    },
+    {
+      "name": "ad-hoc-residual-mean-probe",
+      "status": "passed",
+      "observed": "randomized hermes-verify-*.py confirmed import decoupling and exact residual-mean delegation; temporary verifier removed"
+    },
+    {
+      "name": "wsl-cuda-unit-tests",
+      "status": "passed",
+      "observed": "Exact staged diff applied to the WSL mirror; Ran 11 tests in 0.001s; OK"
+    },
+    {
+      "name": "wsl-cuda-quality-and-package-gates",
+      "status": "passed",
+      "observed": "Ruff, ty, compileall, installed CLI help, sdist, wheel, and heretic/runtime.py wheel-content check passed; disposable package output removed"
+    },
+    {
+      "name": "independent-review",
+      "status": "pending",
+      "observed": null
+    }
+  ],
+  "scope_limits": {
+    "main_residual_analysis_rewired": false,
+    "adapter_state_operations_implemented": false,
+    "distributed_runtime_implemented": false,
+    "gx10_mutated": false,
+    "production_service_mutated": false
+  }
+}

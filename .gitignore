@@ -1,0 +1,68 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info/
+
+# Virtual environments and environments
+.venv/
+.venv-*/
+venv/
+env/
+
+# Caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.cache/
+**/.cache/
+
+# Editors and OS metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local configuration and secrets
+/config.toml
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.credentials
+credentials.*
+secrets.*
+
+# Study state and generated output
+checkpoints/
+plots/
+outputs/
+runs/
+wandb/
+/tests/*/model/
+
+# Model/checkpoint weights
+*.safetensors
+*.gguf
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.h5
+*.npz
+
+# Hugging Face and model caches
+huggingface/
+hub/
+models/
+model-cache/
+
+# Raw agent/session material
+session-cache/
+delegation-cache/
+*.transcript

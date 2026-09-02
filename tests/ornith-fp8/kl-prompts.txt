@@ -1,0 +1,2 @@
+Summarize the purpose of software testing in one sentence.
+Describe one benefit of reproducible builds.

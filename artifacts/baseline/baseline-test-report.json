@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-31T15:45:25-05:00",
+  "source_commit": "bedb94ef117a271532ac2058447fbc165d5051bd",
+  "environment": "CPython 3.12.11; uv frozen environment; Windows 11",
+  "gates": [
+    {
+      "name": "offline-unit-tests",
+      "command": "uv.exe run --frozen python -m unittest discover -s tests -p test_*.py -v",
+      "status": "passed",
+      "observed": "Ran 4 tests in 0.001s; OK"
+    },
+    {
+      "name": "ruff",
+      "command": "uv.exe run --frozen ruff check .",
+      "status": "passed",
+      "observed": "All checks passed!"
+    },
+    {
+      "name": "ty",
+      "command": "uv.exe run --frozen ty check",
+      "status": "passed",
+      "observed": "All checks passed!"
+    },
+    {
+      "name": "cli-entrypoint",
+      "command": "uv.exe run --frozen heretic --help",
+      "status": "passed",
+      "observed": "Exit 0; complete argument parser help rendered"
+    },
+    {
+      "name": "model-producing-reproducibility-suite",
+      "command": "uv.exe run --frozen python tests/run_tests.py",
+      "status": "not-run",
+      "observed": "Upstream runner executes five model-producing fixtures (qwen3.5-moe, qwen2.5, mistral-3, minicpm5, gemma-4e) and validates generated model hashes. It is intentionally tracked as a GPU/network integration gate rather than an offline unit baseline."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "not_run": 1,
+    "offline_baseline_passed": true,
+    "full_model_integration_verified": false
+  }
+}

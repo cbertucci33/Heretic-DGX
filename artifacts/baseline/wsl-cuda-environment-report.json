@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-08-31T18:55:28-05:00",
+  "updated_at": "2026-08-31T19:29:04-05:00",
+  "source_commit": "682ac5f3016d5bef03ff05e64be4ad47dd2c344c",
+  "canonical_repository": "C:\\Projects\\heretic-distributed",
+  "execution_repository": "/home/cb/work/heretic-distributed",
+  "source_commit_baseline": {
+    "captured_at": "2026-08-31T18:55:28-05:00",
+    "source_commit": "682ac5f3016d5bef03ff05e64be4ad47dd2c344c",
+    "unit_tests": {
+      "count": 10,
+      "observed": "Ran 10 tests in 0.001s; OK",
+      "status": "passed"
+    }
+  },
+  "latest_exact_tree_verifier_run": {
+    "status": "passed",
+    "source_commit": "5fba235708d8b7400abcb7a9c909ed04b290e7f0",
+    "git_tree": "aa16b9c6dd10684366681de427aadef87e8cb1f0",
+    "unit_test_count": 15,
+    "verified_at": "2026-08-31T19:29:04-05:00",
+    "python_optimize": "1",
+    "evidence_artifact": "artifacts/verification/wsl-reproducibility-workflow-report.json"
+  },
+  "environment": {
+    "host": "Alien",
+    "runtime": "WSL2",
+    "distribution": "Ubuntu 24.04.4 LTS",
+    "architecture": "x86_64",
+    "python": "3.12.3",
+    "uv": "0.11.11",
+    "torch": "2.13.0+cu130",
+    "torch_cuda_build": "13.0",
+    "cuda_available": true,
+    "cuda_device_count": 1,
+    "cuda_device": "NVIDIA GeForce RTX 5080",
+    "cuda_compute_capability": "12.0",
+    "windows_nvidia_driver": "610.88"
+  },
+  "cuda_smoke": {
+    "operation": "sum(torch.arange(8, device='cuda') * 2)",
+    "expected": 56.0,
+    "observed": 56.0,
+    "status": "passed"
+  },
+  "gates": [
+    {
+      "name": "unit-tests",
+      "evidence_scope": "source_commit_baseline",
+      "status": "passed",
+      "observed": "Ran 10 tests in 0.001s; OK"
+    },
+    {
+      "name": "ruff",
+      "status": "passed",
+      "observed": "All checks passed!"
+    },
+    {
+      "name": "ty",
+      "status": "passed",
+      "observed": "All checks passed!"
+    },
+    {
+      "name": "compileall-and-cli",
+      "status": "passed",
+      "observed": "compileall and installed heretic --help exited 0"
+    },
+    {
+      "name": "linux-package-build",
+      "status": "passed",
+      "observed": "sdist and py3-none-any wheel built; wheel contains heretic/runtime.py; disposable output removed"
+    }
+  ],
+  "workflow": {
+    "default": "Linux/GPU/backend builds and tests execute in WSL first",
+    "durability": "Canonical repository, verification reports, manifests, checksums, and promoted artifacts remain on native C:\\ storage",
+    "qualification_limit": "WSL x86_64 plus RTX 5080 does not prove GX10 ARM64, GB10 unified-memory, FP8, or two-node behavior"
+  },
+  "environment_cleanup": {
+    "stale_profile_entry_removed": ". /tmp/uv-0.11.28/env",
+    "login_shell_verified": true
+  },
+  "durable_verifier": {
+    "path": "scripts/verify-wsl.sh",
+    "documentation": "docs/wsl-development.md",
+    "evidence_scope": "historical_pre-final-tree_run",
+    "bash_syntax_check": "passed",
+    "end_to_end_status": "passed",
+    "observed_terminal_marker": "wsl_verification_passed=true",
+    "final_exact_tree_evidence": "artifacts/verification/wsl-reproducibility-workflow-report.json"
+  }
+}

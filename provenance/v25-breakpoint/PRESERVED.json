@@ -1,0 +1,41 @@
+{
+  "files": [
+    {
+      "bytes": 456368,
+      "name": "heretic-dgx-exact-tree-v24.tar.gz",
+      "sha256": "df4d2a9d726e5b4668f33b6f8b40adaea21d49cc4b5dd62ad3d6a1d12fcf8a21"
+    },
+    {
+      "bytes": 14538,
+      "name": "heretic-v25-clean-manifest.json",
+      "sha256": "4e1750c6af7b8df97c351bad5fa39a8353132c25ba449e8ffb63bd3b99299c5e"
+    },
+    {
+      "bytes": 16,
+      "name": "heretic-v25-compileall.txt",
+      "sha256": "a79ac3130bb1918e6ededc42816106a4e16d8f387b232ee644e3a1ff3832246c"
+    },
+    {
+      "bytes": 616,
+      "name": "heretic-v25-focused-gate.txt",
+      "sha256": "0b9b8e8f585095f17283ca658fb40f2834ef847e32af45b302fa308819f3ad16"
+    },
+    {
+      "bytes": 802,
+      "name": "heretic-v25-full-gate.txt",
+      "sha256": "1ad4d2ec5042e2799b64346bd7a82384b6c0a4e64de0e8355c0934ef631ca67b"
+    },
+    {
+      "bytes": 19,
+      "name": "heretic-v25-ruff.txt",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "bytes": 8353,
+      "name": "laguna-base-sha256.json",
+      "sha256": "044b918f232f4efcd8acd8de167dd6b54461019737da08735408ea4387625fd1"
+    }
+  ],
+  "host": "gx10-01",
+  "purpose": "v25 breakpoint reconstruction and identity evidence"
+}

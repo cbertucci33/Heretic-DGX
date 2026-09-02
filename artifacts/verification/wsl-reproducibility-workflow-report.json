@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "verified_at": "2026-08-31T19:29:04-05:00",
+  "tested_commit": "5fba235708d8b7400abcb7a9c909ed04b290e7f0",
+  "tested_git_tree": "aa16b9c6dd10684366681de427aadef87e8cb1f0",
+  "branch": "feature/distributed-runtime",
+  "repository": "C:\\Projects\\heretic-distributed",
+  "execution_clone": "/home/cb/work/heretic-distributed-verify-aa16b9c6",
+  "environment": {
+    "runtime": "WSL2",
+    "distribution": "Ubuntu 24.04.4 LTS",
+    "architecture": "x86_64",
+    "python": "3.12.3",
+    "torch": "2.13.0+cu130",
+    "torch_cuda_build": "13.0",
+    "cuda_device": "NVIDIA GeForce RTX 5080",
+    "cuda_compute_capability": "12.0",
+    "python_optimize": "1"
+  },
+  "gates": [
+    {
+      "name": "exact-commit-checkout",
+      "status": "passed",
+      "observed": "HEAD exactly matched tested_commit and the execution clone was clean before verification"
+    },
+    {
+      "name": "cuda-tensor-smoke",
+      "status": "passed",
+      "observed": "sum(torch.arange(8, device='cuda') * 2) returned 56.0"
+    },
+    {
+      "name": "unit-tests",
+      "status": "passed",
+      "observed": "Ran 15 tests in 0.122s; OK"
+    },
+    {
+      "name": "ruff",
+      "status": "passed",
+      "observed": "All checks passed!"
+    },
+    {
+      "name": "ty",
+      "status": "passed",
+      "observed": "All checks passed!"
+    },
+    {
+      "name": "compileall-and-cli",
+      "status": "passed",
+      "observed": "compileall and installed heretic --help exited 0"
+    },
+    {
+      "name": "linux-package-build",
+      "status": "passed",
+      "observed": "sdist and wheel built; wheel contains heretic/runtime.py; disposable build output removed"
+    },
+    {
+      "name": "terminal-success-marker",
+      "status": "passed",
+      "observed": "wsl_verification_passed=true"
+    }
+  ],
+  "qualification_boundary": "This verifies WSL2 x86_64 and RTX 5080 behavior only; GX10 ARM64, GB10 unified memory, FP8, one-rank capacity, and two-node transport remain unverified."
+}
