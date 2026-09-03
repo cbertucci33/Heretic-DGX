@@ -50,10 +50,11 @@ compatibility and diagnostic fixes now in the branch.
 
 ## Repository checkpoint
 
-- Commit `bc943fef89bf2e4b97e58d4f966787bacdaf70f1` is pushed on
+- Code checkpoint `bc943fef89bf2e4b97e58d4f966787bacdaf70f1` is pushed on
   `rebuild/two-dgx-upstream-bedb94e`.
-- Both DGX nodes are clean at that commit and tree
-  `23569ce948e8b45e74bb5fc3744fe15a4de948cb`.
+- Both DGX nodes are clean and identical at the active branch tip; documentation-
+  only descendants may follow the code checkpoint. Verify exact commit and tree
+  parity immediately before every launch.
 - Both nodes pass pytest (51 tests plus 3 subtests), Ruff formatting, and Ruff
   lint from that commit.
 - The source distribution and wheel build successfully.
