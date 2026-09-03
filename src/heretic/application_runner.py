@@ -25,6 +25,16 @@ class RankApplicationResult:
     stderr: str
 
 
+def _failure_detail(stdout: str, stderr: str) -> str:
+    """Retain diagnostic output from both streams for a failed rank."""
+    parts = []
+    if stdout.strip():
+        parts.append(f"stdout:\n{stdout.strip()}")
+    if stderr.strip():
+        parts.append(f"stderr:\n{stderr.strip()}")
+    return "\n".join(parts)[-8000:]
+
+
 def run_rank_application_plan(
     plan: RankLaunchPlan,
     *,
@@ -78,7 +88,7 @@ def run_rank_application_plan(
                 f"rank {plan.rank} application exceeded its cleanup deadline"
             ) from error
         if completed.returncode != 0:
-            detail = (completed.stderr.strip() or completed.stdout.strip())[-2000:]
+            detail = _failure_detail(completed.stdout, completed.stderr)
             raise RuntimeError(
                 f"rank {plan.rank} application failed with exit code "
                 f"{completed.returncode}: {detail}"
@@ -125,7 +135,7 @@ def run_rank_application_plan(
             continue
 
     if process.returncode != 0:
-        detail = (stderr.strip() or stdout.strip())[-2000:]
+        detail = _failure_detail(stdout, stderr)
         raise RuntimeError(
             f"rank {plan.rank} application failed with exit code "
             f"{process.returncode}: {detail}"

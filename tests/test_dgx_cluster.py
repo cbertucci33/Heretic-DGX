@@ -319,6 +319,27 @@ rank_address = "10.10.10.2"
         with self.assertRaisesRegex(RuntimeError, "exit code 7"):
             run_rank_application_plan(plan, timeout_seconds=5)
 
+    def test_rank_application_reports_both_output_streams(self) -> None:
+        plan = RankLaunchPlan(
+            rank=0,
+            role="coordinator",
+            host="local",
+            argv=(
+                sys.executable,
+                "-c",
+                "import sys; print('model load failed'); "
+                "print('traceback', file=sys.stderr); raise SystemExit(7)",
+            ),
+            workdir=str(self.root),
+            environment=(),
+        )
+
+        with self.assertRaises(RuntimeError) as raised:
+            run_rank_application_plan(plan, timeout_seconds=5)
+
+        self.assertIn("model load failed", str(raised.exception))
+        self.assertIn("traceback", str(raised.exception))
+
     def test_rank_applications_do_not_start_when_preflight_fails(self) -> None:
         plans = (
             RankLaunchPlan(0, "coordinator", "a", ("/python",), "/work", ()),
