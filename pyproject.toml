@@ -41,7 +41,7 @@ dependencies = [
     "torch",  # version deliberately unspecified
     "torchvision",  # version deliberately unspecified
     "tqdm~=4.67",
-    "transformers[kernels]~=5.6",
+    "transformers[kernels] @ git+https://github.com/huggingface/transformers.git@d65f37ccdcbb0d921d31fafad5af259d701c1341",
 ]
 
 [project.optional-dependencies]

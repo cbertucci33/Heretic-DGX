@@ -1290,7 +1290,7 @@ requires-dist = [
     { name = "torch" },
     { name = "torchvision" },
     { name = "tqdm", specifier = "~=4.67" },
-    { name = "transformers", extras = ["kernels"], specifier = "~=5.6" },
+    { name = "transformers", extras = ["kernels"], git = "https://github.com/huggingface/transformers.git?rev=d65f37ccdcbb0d921d31fafad5af259d701c1341" },
 ]
 provides-extras = ["research"]
 
@@ -4281,8 +4281,8 @@ wheels = [
 
 [[package]]
 name = "transformers"
-version = "5.16.1"
-source = { registry = "https://pypi.org/simple" }
+version = "5.16.0.dev0"
+source = { git = "https://github.com/huggingface/transformers.git?rev=d65f37ccdcbb0d921d31fafad5af259d701c1341#d65f37ccdcbb0d921d31fafad5af259d701c1341" }
 dependencies = [
     { name = "huggingface-hub" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -4294,10 +4294,6 @@ dependencies = [
     { name = "tokenizers" },
     { name = "tqdm" },
     { name = "typer" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/ad/2e/ba418680ab901dae269360bb8642485eae04f1af91ee2ebb8bd6f3607305/transformers-5.16.1.tar.gz", hash = "sha256:17b0eac726ddc55e84ac58946063e0c6d37fd000c456b581f050ea0f4e822869", size = 9650542, upload-time = "2026-08-26T14:48:58.789Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/0d/4d/ee3728674c0bbc637bb4af88ccf0be697f92e4e90b55f5dc110c44d61b61/transformers-5.16.1-py3-none-any.whl", hash = "sha256:2f2d5b98a5ad3718713653734298fa620754ed683702a635ebb587df3ed29c7e", size = 12080592, upload-time = "2026-08-26T14:48:55.083Z" },
 ]
 
 [package.optional-dependencies]
