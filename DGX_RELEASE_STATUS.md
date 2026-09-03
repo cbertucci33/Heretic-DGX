@@ -48,23 +48,30 @@ Transformers FP8 tensor-parallel planning. Those failures are evidence of the
 bring-up path, not evidence that the final export is corrupt; they produced the
 compatibility and diagnostic fixes now in the branch.
 
+## Repository checkpoint
+
+- Commit `bc943fef89bf2e4b97e58d4f966787bacdaf70f1` is pushed on
+  `rebuild/two-dgx-upstream-bedb94e`.
+- Both DGX nodes are clean at that commit and tree
+  `23569ce948e8b45e74bb5fc3744fe15a4de948cb`.
+- Both nodes pass pytest (51 tests plus 3 subtests), Ruff formatting, and Ruff
+  lint from that commit.
+- The source distribution and wheel build successfully.
+- CI now installs pytest and runs the complete pytest suite.
+
 ## Required before release
 
-1. Commit and push the current identical working snapshot, then put both DGX
-   nodes on the same clean commit.
-2. Fix CI so pytest is installed and the standalone-export tests actually run;
-   make formatting, lint, type checking, tests, and package build pass from a
-   clean checkout.
-   The current blockers are type-check/Python-floor diagnostics and golden
-   output hash drift across all five existing model fixtures.
-3. Reclaim retained CUDA/UVM memory and verify actual available RAM on both
+1. Resolve the type-check/Python-floor diagnostics and golden output hash drift
+   across all five existing model fixtures; then make the exact CI command set
+   pass from a clean checkout.
+2. Reclaim retained CUDA/UVM memory and verify actual available RAM on both
    nodes before any further model workload.
-4. From the clean committed checkout, load the exported Laguna checkpoint in a
+3. From the clean committed checkout, load the exported Laguna checkpoint in a
    fresh process and produce a real generation.
-5. Repeat one bounded Laguna run from clean identical checkouts. Use at least
+4. Repeat one bounded Laguna run from clean identical checkouts. Use at least
    two trials so optimizer comparison and winner restoration are exercised on
    the real model, then reload and generate from the new standalone output.
-6. Install the built wheel in a clean environment and prove `heretic --help`
+5. Install the built wheel in a clean environment and prove `heretic --help`
    plus the documented coordinator command.
 
 ## Test scope after the release gate
