@@ -51,6 +51,16 @@ def get_model_class(
         return AutoModelForCausalLM
 
 
+def get_tokenizer_kwargs(model: str, revision_kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Build tokenizer kwargs without instantiating Laguna's composite RoPE config."""
+    kwargs = dict(revision_kwargs)
+    config, _ = PretrainedConfig.get_config_dict(model, **revision_kwargs)
+    if config.get("model_type") == "laguna":
+        kwargs["config"] = PretrainedConfig()
+        kwargs["fix_mistral_regex"] = True
+    return kwargs
+
+
 @dataclass
 class AbliterationParameters:
     max_weight: float
@@ -80,7 +90,7 @@ class Model:
 
         self.tokenizer = AutoTokenizer.from_pretrained(
             settings.model,
-            **self.revision_kwargs,
+            **get_tokenizer_kwargs(settings.model, self.revision_kwargs),
         )
 
         # Multimodal models have a processor we'll want to save.
