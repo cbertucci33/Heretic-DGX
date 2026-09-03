@@ -10,7 +10,6 @@ import torch
 from torch import Tensor
 from torch.distributed.tensor import Replicate, Shard
 
-
 TargetTopology = Literal["replicated", "rowwise", "colwise"]
 _SUPPORTED_TP_LORA_STYLES = frozenset({"rowwise", "colwise"})
 
@@ -34,7 +33,9 @@ def _matching_model_plan(
         )
     ]
     if len(matches) > 1:
-        raise ValueError(f"ambiguous tensor-parallel plan for LoRA target {target_name!r}")
+        raise ValueError(
+            f"ambiguous tensor-parallel plan for LoRA target {target_name!r}"
+        )
     return matches[0] if matches else None
 
 

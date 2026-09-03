@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass
-from datetime import timedelta
 import json
 import os
+from dataclasses import asdict, dataclass
+from datetime import timedelta
 
 
 @dataclass(frozen=True, slots=True)

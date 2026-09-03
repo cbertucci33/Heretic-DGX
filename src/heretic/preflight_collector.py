@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import shlex
 import subprocess
+from pathlib import Path
 
 from .launch_plan import RankLaunchPlan
 from .rank_preflight import (

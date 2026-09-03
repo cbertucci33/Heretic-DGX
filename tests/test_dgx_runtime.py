@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
 from unittest import TestCase
+from unittest.mock import patch
 
 import torch
 import torch.distributed as dist
@@ -15,7 +16,7 @@ from heretic.dgx_runtime import (
     TorchDistributedCommandChannel,
     run_dgx_worker,
 )
-from heretic.runtime import ModelRuntime
+from heretic.runtime import ModelRuntime, gather_tensor_parallel_lora_shard
 from heretic.utils import Prompt
 
 
@@ -109,6 +110,21 @@ def _gloo_runtime_entry(rank: int, port: int, results: Any) -> None:
 
 
 class DgxRuntimeTests(TestCase):
+    def test_gathers_rowwise_lora_a_in_rank_order(self) -> None:
+        local = torch.tensor([[1.0, 2.0]])
+
+        def all_gather(outputs, value) -> None:
+            outputs[0].copy_(value)
+            outputs[1].copy_(value + 2)
+
+        with (
+            patch("heretic.runtime.dist.get_world_size", return_value=2),
+            patch("heretic.runtime.dist.all_gather", side_effect=all_gather),
+        ):
+            gathered = gather_tensor_parallel_lora_shard(local, dimension=1)
+
+        torch.testing.assert_close(gathered, torch.tensor([[1.0, 2.0, 3.0, 4.0]]))
+
     def test_worker_failure_latches_runtime_and_preserves_first_error(self) -> None:
         local = _RecordingRuntime()
         channel = _CoordinatorChannel(peer_error="rank 1: out of memory")

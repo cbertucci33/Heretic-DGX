@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass
 import hashlib
 import json
 import os
-from pathlib import Path
 import stat
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
 _CONFIG_FILENAME = "config.json"
 _INDEX_FILENAME = "model.safetensors.index.json"
@@ -60,7 +60,9 @@ def _read_json_object(path: Path) -> dict[str, object]:
     try:
         raw = path.read_text(encoding="utf-8")
     except UnicodeDecodeError as error:
-        raise ValueError(f"checkpoint metadata must be UTF-8 JSON: {path.name}") from error
+        raise ValueError(
+            f"checkpoint metadata must be UTF-8 JSON: {path.name}"
+        ) from error
     try:
         value = json.loads(
             raw,
@@ -177,7 +179,9 @@ def build_checkpoint_payload_identity(
     root = Path(checkpoint_directory)
     if not root.is_dir():
         raise FileNotFoundError(f"checkpoint directory does not exist: {root}")
-    files = tuple(_hash_regular_file(root / name) for name in _checkpoint_filenames(root))
+    files = tuple(
+        _hash_regular_file(root / name) for name in _checkpoint_filenames(root)
+    )
     canonical = json.dumps(
         {"files": [asdict(file) for file in files], "version": 1},
         sort_keys=True,

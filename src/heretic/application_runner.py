@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
 import os
 import shlex
 import signal
 import subprocess
-from threading import Event
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from threading import Event
 
 from .launch_plan import RankLaunchPlan
 from .preflight_collector import collect_rank_preflights
@@ -23,6 +25,39 @@ class RankApplicationResult:
     rank: int
     stdout: str
     stderr: str
+    stdout_log: Path
+    stderr_log: Path
+
+
+def _rank_log_paths(plan: RankLaunchPlan) -> tuple[Path, Path]:
+    """Allocate private, durable output files before launching a rank."""
+    configured_directory = os.environ.get("HERETIC_LOG_DIR")
+    log_directory = (
+        Path(configured_directory).expanduser()
+        if configured_directory
+        else Path.home() / ".local" / "state" / "heretic" / "rank-logs"
+    )
+    log_directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
+    prefix = f"{timestamp}-pid{os.getpid()}-rank{plan.rank}"
+    return (
+        log_directory / f"{prefix}.stdout.log",
+        log_directory / f"{prefix}.stderr.log",
+    )
+
+
+def _open_private_log(path: Path):
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    return os.fdopen(descriptor, "w", encoding="utf-8")
+
+
+def _read_log(path: Path) -> str:
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def _write_private_log(path: Path, content: str) -> None:
+    with _open_private_log(path) as log_file:
+        log_file.write(content)
 
 
 def _failure_detail(stdout: str, stderr: str) -> str:
@@ -33,6 +68,10 @@ def _failure_detail(stdout: str, stderr: str) -> str:
     if stderr.strip():
         parts.append(f"stderr:\n{stderr.strip()[-8000:]}")
     return "\n".join(parts)
+
+
+def _log_reference(stdout_log: Path, stderr_log: Path) -> str:
+    return f"full logs: stdout={stdout_log} stderr={stderr_log}"
 
 
 def run_rank_application_plan(
@@ -73,6 +112,7 @@ def run_rank_application_plan(
         workdir = None
 
     if cancellation is None:
+        stdout_log, stderr_log = _rank_log_paths(plan)
         try:
             completed = subprocess.run(
                 command,
@@ -84,66 +124,87 @@ def run_rank_application_plan(
                 check=False,
             )
         except subprocess.TimeoutExpired as error:
+            stdout = error.stdout or ""
+            stderr = error.stderr or ""
+            if isinstance(stdout, bytes):
+                stdout = stdout.decode("utf-8", errors="replace")
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode("utf-8", errors="replace")
+            _write_private_log(stdout_log, stdout)
+            _write_private_log(stderr_log, stderr)
             raise RuntimeError(
-                f"rank {plan.rank} application exceeded its cleanup deadline"
+                f"rank {plan.rank} application exceeded its cleanup deadline; "
+                f"{_log_reference(stdout_log, stderr_log)}"
             ) from error
+        _write_private_log(stdout_log, completed.stdout)
+        _write_private_log(stderr_log, completed.stderr)
         if completed.returncode != 0:
             detail = _failure_detail(completed.stdout, completed.stderr)
             raise RuntimeError(
                 f"rank {plan.rank} application failed with exit code "
-                f"{completed.returncode}: {detail}"
+                f"{completed.returncode}; "
+                f"{_log_reference(stdout_log, stderr_log)}: {detail}"
             )
         return RankApplicationResult(
             rank=plan.rank,
             stdout=completed.stdout,
             stderr=completed.stderr,
+            stdout_log=stdout_log,
+            stderr_log=stderr_log,
         )
 
     if cancellation.is_set():
         raise RuntimeError(f"rank {plan.rank} application cancelled before launch")
 
-    process = subprocess.Popen(
-        command,
-        cwd=workdir,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        start_new_session=True,
-    )
+    stdout_log, stderr_log = _rank_log_paths(plan)
+    with (
+        _open_private_log(stdout_log) as stdout_file,
+        _open_private_log(stderr_log) as stderr_file,
+    ):
+        process = subprocess.Popen(
+            command,
+            cwd=workdir,
+            stdin=subprocess.DEVNULL,
+            stdout=stdout_file,
+            stderr=stderr_file,
+            start_new_session=True,
+        )
     deadline = time.monotonic() + timeout_seconds + 10
-    stdout = ""
-    stderr = ""
     while True:
         if cancellation.is_set():
             _terminate_process_group(process)
-            stdout, stderr = process.communicate()
             raise RuntimeError(
-                f"rank {plan.rank} application cancelled because its peer failed"
+                f"rank {plan.rank} application cancelled because its peer failed; "
+                f"{_log_reference(stdout_log, stderr_log)}"
             )
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             _terminate_process_group(process)
-            process.communicate()
             raise RuntimeError(
-                f"rank {plan.rank} application exceeded its cleanup deadline"
+                f"rank {plan.rank} application exceeded its cleanup deadline; "
+                f"{_log_reference(stdout_log, stderr_log)}"
             )
         try:
-            stdout, stderr = process.communicate(timeout=min(0.1, remaining))
+            process.wait(timeout=min(0.1, remaining))
             break
         except subprocess.TimeoutExpired:
             continue
 
+    stdout = _read_log(stdout_log)
+    stderr = _read_log(stderr_log)
     if process.returncode != 0:
         detail = _failure_detail(stdout, stderr)
         raise RuntimeError(
             f"rank {plan.rank} application failed with exit code "
-            f"{process.returncode}: {detail}"
+            f"{process.returncode}; {_log_reference(stdout_log, stderr_log)}: "
+            f"{detail}"
         )
     return RankApplicationResult(
         rank=plan.rank,
         stdout=stdout,
         stderr=stderr,
+        stdout_log=stdout_log,
+        stderr_log=stderr_log,
     )
 
 

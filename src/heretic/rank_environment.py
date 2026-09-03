@@ -35,7 +35,9 @@ def _integer(values: Mapping[str, str], name: str) -> int:
     try:
         return int(raw)
     except ValueError as error:
-        raise ValueError(f"rank environment variable {name} must be an integer") from error
+        raise ValueError(
+            f"rank environment variable {name} must be an integer"
+        ) from error
 
 
 def read_rank_environment(values: Mapping[str, str]) -> RankEnvironment:

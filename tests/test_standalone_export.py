@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 import torch
 from peft import LoraConfig, get_peft_model
-
 from safetensors.torch import save_file
 
 from heretic.standalone_export import (
@@ -43,9 +42,7 @@ def test_bf16_merge_matches_real_peft_merge() -> None:
             torch.arange(6, dtype=torch.float32).reshape(3, 2).to(torch.bfloat16) / 8
         )
     base_before = layer.base_layer.weight.detach().clone()
-    expected = (
-        base_before + layer.get_delta_weight("default")
-    ).to(torch.bfloat16)
+    expected = (base_before + layer.get_delta_weight("default")).to(torch.bfloat16)
 
     actual = merge_bf16_lora_weight(
         base_before,
@@ -141,9 +138,19 @@ def test_exports_standalone_checkpoint_without_changing_fp8_tensors(tmp_path) ->
         '["model.layers.0.self_attn.o_proj"]}}'
     )
     index_text = (
-        '{"weight_map":{"' + base_key + '":"' + changed_shard + '","'
-        + fp8_key + '":"' + changed_shard + '","'
-        + other_key + '":"' + untouched_shard + '"}}'
+        '{"weight_map":{"'
+        + base_key
+        + '":"'
+        + changed_shard
+        + '","'
+        + fp8_key
+        + '":"'
+        + changed_shard
+        + '","'
+        + other_key
+        + '":"'
+        + untouched_shard
+        + '"}}'
     )
     (source / "config.json").write_text(config_text)
     (source / "model.safetensors.index.json").write_text(index_text)
@@ -198,6 +205,7 @@ def test_exports_standalone_checkpoint_without_changing_fp8_tensors(tmp_path) ->
     assert output_bytes[:target_start] == changed_bytes[:target_start]
     assert output_bytes[target_end:] == changed_bytes[target_end:]
     from safetensors.torch import load_file
+
     state = load_file(output / changed_shard)
     assert torch.equal(
         state[base_key],
@@ -268,12 +276,8 @@ def test_runtime_adapter_is_consumed_into_standalone_checkpoint(tmp_path) -> Non
             prefix = "base_model.model.model.layers.0.self_attn.o_proj"
             save_file(
                 {
-                    f"{prefix}.lora_A.weight": torch.ones(
-                        (2, 5), dtype=torch.bfloat16
-                    ),
-                    f"{prefix}.lora_B.weight": torch.ones(
-                        (3, 2), dtype=torch.bfloat16
-                    ),
+                    f"{prefix}.lora_A.weight": torch.ones((2, 5), dtype=torch.bfloat16),
+                    f"{prefix}.lora_B.weight": torch.ones((3, 2), dtype=torch.bfloat16),
                 },
                 adapter / "adapter_model.safetensors",
             )
@@ -323,7 +327,9 @@ def test_standalone_strategy_requires_explicit_local_checkpoint(tmp_path) -> Non
         require_standalone_source_directory(ExportStrategy.STANDALONE, source)
         == source.resolve()
     )
-    assert require_standalone_source_directory(ExportStrategy.ADAPTER, "org/model") is None
+    assert (
+        require_standalone_source_directory(ExportStrategy.ADAPTER, "org/model") is None
+    )
     with pytest.raises(ValueError, match="explicit local checkpoint"):
         require_standalone_source_directory(ExportStrategy.STANDALONE, "org/model")
 
@@ -337,7 +343,9 @@ def test_standalone_upload_cannot_fall_through_to_full_merge() -> None:
     assert not supports_direct_upload(ExportStrategy.STANDALONE)
 
 
-def test_distributed_export_requires_standalone_but_local_choices_are_preserved() -> None:
+def test_distributed_export_requires_standalone_but_local_choices_are_preserved() -> (
+    None
+):
     from heretic.config import ExportStrategy
     from heretic.main import require_distributed_standalone_export
 

@@ -16,8 +16,10 @@ import torch.nn.functional as F
 from peft import LoraConfig, PeftModel, get_peft_model
 from peft.tuners.lora.layer import Linear
 from torch import FloatTensor, LongTensor, Tensor
+from torch.distributed.tensor import DTensor
 from torch.nn import Module, ModuleList
 from transformers import (
+    AutoConfig,
     AutoModelForCausalLM,
     AutoModelForImageTextToText,
     AutoProcessor,
@@ -35,7 +37,7 @@ from transformers.generation import (
 )
 
 from .config import QuantizationMethod, RowNormalization, Settings
-from .model_loading import build_model_load_kwargs
+from .model_loading import build_model_load_kwargs, complete_laguna_dgx_tp_plan
 from .system import empty_cache
 from .tp_capabilities import directional_lora_factors, inspect_lora_target_topologies
 from .utils import Prompt, batchify, format_exception, print
@@ -114,6 +116,18 @@ class Model:
         self.trusted_models = set()
         self.model = None  # ty:ignore[invalid-assignment]
         self.distributed = os.environ.get("HERETIC_DGX_ACTIVE") == "1"
+        self.model_config = None
+        raw_config, _ = PretrainedConfig.get_config_dict(
+            settings.model, **self.revision_kwargs
+        )
+        if self.distributed and raw_config.get("model_type") == "laguna":
+            self.model_config = complete_laguna_dgx_tp_plan(
+                AutoConfig.from_pretrained(
+                    settings.model,
+                    trust_remote_code=True,
+                    **self.revision_kwargs,
+                )
+            )
 
         for dtype in settings.dtypes:
             print(f"* Trying dtype [bold]{dtype}[/]...")
@@ -131,6 +145,7 @@ class Model:
                         device_map=settings.device_map,
                         max_memory=settings.max_memory,
                         trust_remote_code=settings.model in self.trusted_models,
+                        config=self.model_config,
                     ),
                 )
 
@@ -250,7 +265,16 @@ class Model:
 
         # self.peft_config is a LoraConfig object rather than a dictionary,
         # so the result is a PeftModel rather than a PeftMixedModel.
-        self.model = cast(PeftModel, get_peft_model(self.model, self.peft_config))
+        # Standalone FP8 export merges these tensors into protected BF16 base
+        # weights. PEFT otherwise promotes BF16 adapter parameters to FP32.
+        self.model = cast(
+            PeftModel,
+            get_peft_model(
+                self.model,
+                self.peft_config,
+                autocast_adapter_dtype=False,
+            ),
+        )
 
         display_targets = sorted({name.rsplit(".", 1)[-1] for name in target_modules})
         print(
@@ -461,9 +485,7 @@ class Model:
             allowed = set(self.settings.abliteration_components)
             unknown = allowed - {"attn.o_proj", "mlp.down_proj"}
             if unknown:
-                raise ValueError(
-                    f"unknown abliteration components: {sorted(unknown)}"
-                )
+                raise ValueError(f"unknown abliteration components: {sorted(unknown)}")
             modules = {
                 component: component_modules
                 for component, component_modules in modules.items()
@@ -592,10 +614,7 @@ class Model:
                                 "missing supported tensor-parallel topology for LoRA target"
                             )
                         if topology != "replicated":
-                            if (
-                                self.settings.row_normalization
-                                == RowNormalization.FULL
-                            ):
+                            if self.settings.row_normalization == RowNormalization.FULL:
                                 raise ValueError(
                                     "FULL row normalization is not supported for "
                                     "sharded distributed targets"
@@ -606,8 +625,12 @@ class Model:
                                 dist.all_reduce(result)
                                 return result
 
+                            # directional_lora_factors operates on the rank-local
+                            # shard. Keeping W as a DTensor would route the explicit
+                            # c10d reduction below back through DTensor dispatch.
+                            local_W = W.to_local() if isinstance(W, DTensor) else W
                             factors = directional_lora_factors(
-                                W,
+                                local_W,
                                 v,
                                 strength=weight,
                                 normalization=self.settings.row_normalization.value,

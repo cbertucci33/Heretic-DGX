@@ -4,6 +4,27 @@ Whenever we change any code-logic related to `src/heretic/model.py` or `config.t
 
 ## How to test
 
+### Python and DGX unit tests
+
+Install the development dependencies and run pytest before the model-output
+reproducibility suite:
+
+```bash
+uv sync --all-extras --dev
+uv run pytest -q
+```
+
+The DGX tests are CPU-safe and use local fixtures or mocked collectives; they do
+not start a main model. A release candidate must pass them on both DGX nodes
+from the same clean commit.
+
+`tests/run_tests.py` is a real CUDA/model-output reproducibility suite, not a
+unit test. Run it only in an approved model-work window with all main models off
+and adequate verified free memory. Any output-hash drift is a release blocker
+until explained; do not bless new hashes merely to make CI green.
+
+### Model-output reproducibility tests
+
 1. Choose any model from [tiny-random](https://huggingface.co/tiny-random) org which provides tiny models useful for debugging. 
 
 **Example**: [tiny-random/minicpm5](https://huggingface.co/tiny-random/minicpm5).

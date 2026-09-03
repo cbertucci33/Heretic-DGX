@@ -128,6 +128,12 @@ run standard benchmarks on it, or any combination of those actions.
 
 ### Two-node DGX Spark operation
 
+> [!WARNING]
+>
+> Distributed support is an engineering release candidate, not a general model
+> support claim. Read [the current evidence, limitations, and release
+> checklist](DGX_RELEASE_STATUS.md) before operating it.
+
 This fork supports one coordinator command across exactly two DGX Spark nodes.
 Start from identical clean checkouts on both nodes, copy and complete
 [`cluster.example.toml`](cluster.example.toml), and keep the cluster file outside
@@ -144,7 +150,10 @@ configuration, and model paths:
 The coordinator preflights both source trees and checkpoint payloads before
 launching either rank. A mismatch, timeout, or rank failure stops the run and
 returns a nonzero exit status. The cluster runtime currently requires NCCL and
-exactly one GPU-backed rank per node.
+exactly one GPU-backed rank per node. Distributed standalone export is currently
+validated only for the pinned Laguna S 2.1 FP8 checkpoint and its BF16
+`attn.o_proj` target islands. Other distributed model families, ablation
+components, and quantization formats are unverified.
 
 
 ## Research features

@@ -12,7 +12,6 @@ from .model import AbliterationParameters
 from .runtime import ModelRuntime
 from .utils import Prompt
 
-
 DgxOperation = Literal[
     "shutdown",
     "reset_model",
@@ -39,7 +38,9 @@ class DgxCommand:
             raise ValueError("unsupported DGX runtime operation")
         if type(self.args) is not tuple:
             raise TypeError("DGX command args must be exactly tuple")
-        if type(self.kwargs) is not dict or any(type(key) is not str for key in self.kwargs):
+        if type(self.kwargs) is not dict or any(
+            type(key) is not str for key in self.kwargs
+        ):
             raise TypeError("DGX command kwargs must be a string-keyed dict")
 
 
@@ -56,7 +57,9 @@ class TorchDistributedCommandChannel:
 
     def __init__(self) -> None:
         if not dist.is_available() or not dist.is_initialized():
-            raise RuntimeError("DGX command channel requires an initialized process group")
+            raise RuntimeError(
+                "DGX command channel requires an initialized process group"
+            )
         if dist.get_world_size() != 2:
             raise RuntimeError("DGX command channel requires exactly two ranks")
         self._rank = dist.get_rank()

@@ -94,16 +94,16 @@ from .analyzer import Analyzer
 from .config import ExportStrategy, QuantizationMethod
 from .evaluator import Evaluator
 from .model import AbliterationParameters, Model, get_model_class
+from .reproduce import (
+    check_environment,
+    collect_reproducibles,
+    load_reproduction_information,
+)
 from .runtime import LocalModelRuntime, ModelRuntime
 from .standalone_export import (
     LAGUNA_S_2_1_FP8_IDENTITY,
     save_runtime_as_standalone,
     verify_checkpoint_identity,
-)
-from .reproduce import (
-    check_environment,
-    collect_reproducibles,
-    load_reproduction_information,
 )
 from .system import empty_cache, get_accelerator_info
 from .utils import (
@@ -187,7 +187,11 @@ def export_strategy_choices(
     return (
         Choice(
             title="Merge the abliteration LoRA and export the full model"
-            + ("" if quantization == QuantizationMethod.NONE else " (requires sufficient RAM)"),
+            + (
+                ""
+                if quantization == QuantizationMethod.NONE
+                else " (requires sufficient RAM)"
+            ),
             value=ExportStrategy.MERGE,
         ),
         Choice(

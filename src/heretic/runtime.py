@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from contextlib import suppress
 import shutil
 import tempfile
+from abc import ABC, abstractmethod
+from contextlib import suppress
 from typing import TYPE_CHECKING
 
+import torch
 import torch.distributed as dist
 from torch import Tensor
 
@@ -16,6 +17,14 @@ from .utils import Prompt
 
 if TYPE_CHECKING:
     from .model import AbliterationParameters, Model
+
+
+def gather_tensor_parallel_lora_shard(local: Tensor, *, dimension: int) -> Tensor:
+    """Gather equal rank-local LoRA shards into checkpoint tensor order."""
+
+    shards = [local.new_empty(local.shape) for _ in range(dist.get_world_size())]
+    dist.all_gather(shards, local.contiguous())
+    return torch.cat(shards, dim=dimension)
 
 
 class ModelRuntime(ABC):
@@ -112,24 +121,45 @@ class LocalModelRuntime(ModelRuntime):
             return
 
         rank = dist.get_rank()
-        if rank == 0:
-            self._model.model.save_pretrained(
-                directory,
-                max_shard_size=max_shard_size,
-                is_main_process=True,
+        restored: list[tuple[Tensor, Tensor]] = []
+        for module in self._model.model.modules():
+            base_layer = getattr(module, "base_layer", None)
+            topology = self._model._lora_target_topologies_by_base_id.get(
+                id(base_layer)
             )
-            return
+            if topology == "rowwise":
+                parameter = module.lora_A["default"].weight
+                dimension = 1
+            elif topology == "colwise":
+                parameter = module.lora_B["default"].weight
+                dimension = 0
+            else:
+                continue
+            full = gather_tensor_parallel_lora_shard(
+                parameter.detach(),
+                dimension=dimension,
+            )
+            if rank == 0:
+                restored.append((parameter, parameter.data))
+                parameter.data = full
 
-        sink = tempfile.mkdtemp(prefix=f"heretic-adapter-rank-{rank}-")
+        sink = (
+            directory
+            if rank == 0
+            else tempfile.mkdtemp(prefix=f"heretic-adapter-rank-{rank}-")
+        )
         try:
             self._model.model.save_pretrained(
                 sink,
                 max_shard_size=max_shard_size,
-                is_main_process=False,
+                is_main_process=rank == 0,
             )
         finally:
-            with suppress(OSError):
-                shutil.rmtree(sink)
+            for parameter, local in restored:
+                parameter.data = local
+            if rank != 0:
+                with suppress(OSError):
+                    shutil.rmtree(sink)
 
     def save_merged(self, directory: str, *, max_shard_size: int | str) -> None:
         self._require_active()

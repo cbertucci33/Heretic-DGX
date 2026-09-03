@@ -26,6 +26,4 @@ def test_standard_tokenizer_kwargs_are_unchanged(monkeypatch) -> None:
         lambda *_args, **_kwargs: ({"model_type": "qwen2"}, {}),
     )
 
-    assert get_tokenizer_kwargs("Qwen/Qwen2.5", {"revision": "x"}) == {
-        "revision": "x"
-    }
+    assert get_tokenizer_kwargs("Qwen/Qwen2.5", {"revision": "x"}) == {"revision": "x"}

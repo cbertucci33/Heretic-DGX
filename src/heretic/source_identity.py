@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass
 import hashlib
-from importlib.metadata import version
 import json
-from pathlib import Path
 import sys
+from dataclasses import asdict, dataclass
+from importlib.metadata import version
+from pathlib import Path
 
 
 @dataclass(frozen=True, slots=True)

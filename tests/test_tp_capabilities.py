@@ -58,9 +58,7 @@ class TensorParallelCapabilityTests(TestCase):
         weight = torch.tensor(
             [[1.0, 2.0, 3.0, 4.0], [2.0, 1.0, 0.5, 3.0], [0.5, 1.5, 2.5, 3.5]]
         )
-        direction = torch.nn.functional.normalize(
-            torch.tensor([0.5, -1.0, 1.5]), dim=0
-        )
+        direction = torch.nn.functional.normalize(torch.tensor([0.5, -1.0, 1.5]), dim=0)
         local_weights = (weight[:, :2], weight[:, 2:])
         factors = []
         for rank, local_weight in enumerate(local_weights):
@@ -89,9 +87,7 @@ class TensorParallelCapabilityTests(TestCase):
         torch.testing.assert_close(factors[1].b, expected_b)
 
     def test_colwise_none_factors_match_unsharded_oracle(self) -> None:
-        weight = torch.tensor(
-            [[1.0, 2.0], [2.0, 1.0], [0.5, 1.5], [3.0, 2.0]]
-        )
+        weight = torch.tensor([[1.0, 2.0], [2.0, 1.0], [0.5, 1.5], [3.0, 2.0]])
         direction = torch.nn.functional.normalize(
             torch.tensor([0.5, -1.0, 1.5, 0.25]), dim=0
         )
@@ -102,9 +98,9 @@ class TensorParallelCapabilityTests(TestCase):
             zip(local_weights, local_directions, strict=True)
         ):
             peer_rank = 1 - rank
-            peer_a = (
-                local_directions[peer_rank] @ local_weights[peer_rank]
-            ).view(1, -1)
+            peer_a = (local_directions[peer_rank] @ local_weights[peer_rank]).view(
+                1, -1
+            )
             factors.append(
                 directional_lora_factors(
                     local_weight,

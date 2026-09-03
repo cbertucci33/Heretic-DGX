@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass
-from importlib.metadata import version
 import json
 import os
-from pathlib import Path
 import sys
+from dataclasses import asdict, dataclass
+from importlib.metadata import version
+from pathlib import Path
 
 from .checkpoint_identity import (
     CheckpointFileIdentity,

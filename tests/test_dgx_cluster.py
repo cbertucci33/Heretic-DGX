@@ -1,26 +1,22 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-from dataclasses import replace
-from pathlib import Path
+import os
 import subprocess
 import sys
-from threading import Event, Thread
 import time
+from dataclasses import replace
+from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import Event, Thread
 from unittest import TestCase
 from unittest.mock import patch
 
-from heretic.checkpoint_identity import build_checkpoint_payload_identity
 from heretic.application_runner import (
     collect_rank_applications,
     preflight_and_collect_rank_applications,
     run_rank_application_plan,
 )
-from heretic.dgx_runtime import (
-    DgxCommand,
-    DgxCoordinatorRuntime,
-    run_dgx_worker,
-)
+from heretic.checkpoint_identity import build_checkpoint_payload_identity
 from heretic.cluster import load_cluster_config
 from heretic.cluster_cli import launch_cluster_application
 from heretic.collective_probe import CollectiveProbeResult
@@ -28,12 +24,19 @@ from heretic.collective_probe_runner import (
     _run_probe_plan,
     preflight_and_collect_rank_collective_probes,
 )
-from heretic.launch_plan import build_rank_launch_plans
-from heretic.launch_plan import RankLaunchPlan
-from heretic.model_loading import build_model_load_kwargs
+from heretic.dgx_runtime import (
+    DgxCommand,
+    DgxCoordinatorRuntime,
+    run_dgx_worker,
+)
+from heretic.launch_plan import RankLaunchPlan, build_rank_launch_plans
+from heretic.model_loading import (
+    build_model_load_kwargs,
+    complete_laguna_dgx_tp_plan,
+)
 from heretic.preflight_collector import collect_rank_preflights
-from heretic.rank_environment import read_rank_environment
 from heretic.rank_application import run_rank_application
+from heretic.rank_environment import read_rank_environment
 from heretic.rank_preflight import (
     RankPreflightIdentity,
     require_matching_rank_preflights,
@@ -65,8 +68,14 @@ class TestDgxCluster(TestCase):
     def setUp(self) -> None:
         self.temporary_directory = TemporaryDirectory()
         self.root = Path(self.temporary_directory.name)
+        self.environment_patch = patch.dict(
+            os.environ,
+            {"HERETIC_LOG_DIR": str(self.root / "rank-logs")},
+        )
+        self.environment_patch.start()
 
     def tearDown(self) -> None:
+        self.environment_patch.stop()
         self.temporary_directory.cleanup()
 
     def test_two_node_config_builds_parseable_rank_plans(self) -> None:
@@ -224,7 +233,9 @@ rank_address = "10.10.10.2"
         self.assertEqual(run.call_args_list[0].args[0][0], "env")
         self.assertEqual(run.call_args_list[1].args[0][0], "ssh")
 
-    def test_collective_probe_runs_coordinator_locally_and_worker_over_ssh(self) -> None:
+    def test_collective_probe_runs_coordinator_locally_and_worker_over_ssh(
+        self,
+    ) -> None:
         cluster_file = self.root / "cluster.toml"
         cluster_file.write_text(
             'python = "/python"\nworkdir = "/work"\n'
@@ -282,13 +293,16 @@ rank_address = "10.10.10.2"
         events = []
         identity = object()
 
-        with patch(
-            "heretic.collective_probe_runner.collect_rank_preflights",
-            side_effect=lambda *_, **__: events.append("preflight") or identity,
-        ), patch(
-            "heretic.collective_probe_runner._run_probe_plan",
-            side_effect=lambda plan, **_: events.append(f"rank-{plan.rank}")
-            or results[plan.rank],
+        with (
+            patch(
+                "heretic.collective_probe_runner.collect_rank_preflights",
+                side_effect=lambda *_, **__: events.append("preflight") or identity,
+            ),
+            patch(
+                "heretic.collective_probe_runner._run_probe_plan",
+                side_effect=lambda plan, **_: events.append(f"rank-{plan.rank}")
+                or results[plan.rank],
+            ),
         ):
             preflight, collected = preflight_and_collect_rank_collective_probes(
                 plans,
@@ -300,12 +314,13 @@ rank_address = "10.10.10.2"
         self.assertEqual(collected, tuple(results))
         self.assertEqual(events[0], "preflight")
 
-        with patch(
-            "heretic.collective_probe_runner.collect_rank_preflights",
-            side_effect=RuntimeError("identity mismatch"),
-        ), patch(
-            "heretic.collective_probe_runner._run_probe_plan"
-        ) as run_probe:
+        with (
+            patch(
+                "heretic.collective_probe_runner.collect_rank_preflights",
+                side_effect=RuntimeError("identity mismatch"),
+            ),
+            patch("heretic.collective_probe_runner._run_probe_plan") as run_probe,
+        ):
             with self.assertRaisesRegex(RuntimeError, "identity mismatch"):
                 preflight_and_collect_rank_collective_probes(
                     plans,
@@ -328,6 +343,9 @@ rank_address = "10.10.10.2"
 
         self.assertEqual(result.rank, 0)
         self.assertEqual(result.stdout, "rank-zero-ok\n")
+        self.assertEqual(result.stdout_log.read_text(), "rank-zero-ok\n")
+        self.assertEqual(result.stderr_log.read_text(), "")
+        self.assertEqual(result.stdout_log.stat().st_mode & 0o777, 0o600)
 
     def test_rank_application_propagates_nonzero_exit(self) -> None:
         plan = RankLaunchPlan(
@@ -362,6 +380,10 @@ rank_address = "10.10.10.2"
 
         self.assertIn("model load failed", str(raised.exception))
         self.assertIn("traceback", str(raised.exception))
+        logs = sorted((self.root / "rank-logs").glob("*.log"))
+        self.assertEqual(len(logs), 2)
+        self.assertIn("model load failed", "".join(path.read_text() for path in logs))
+        self.assertIn("traceback", "".join(path.read_text() for path in logs))
 
     def test_rank_application_preserves_each_stream_when_stderr_is_long(self) -> None:
         plan = RankLaunchPlan(
@@ -390,10 +412,13 @@ rank_address = "10.10.10.2"
             RankLaunchPlan(1, "worker", "b", ("/python",), "/work", ()),
         )
 
-        with patch(
-            "heretic.application_runner.collect_rank_preflights",
-            side_effect=RuntimeError("identity mismatch"),
-        ), patch("heretic.application_runner.collect_rank_applications") as collect:
+        with (
+            patch(
+                "heretic.application_runner.collect_rank_preflights",
+                side_effect=RuntimeError("identity mismatch"),
+            ),
+            patch("heretic.application_runner.collect_rank_applications") as collect,
+        ):
             with self.assertRaisesRegex(RuntimeError, "identity mismatch"):
                 preflight_and_collect_rank_applications(
                     plans,
@@ -606,6 +631,29 @@ rank_address = "10.10.10.2"
         self.assertNotIn("max_memory", distributed)
         for name in ("dtype", "quantization_config", "revision", "trust_remote_code"):
             self.assertEqual(local[name], distributed[name])
+
+    def test_laguna_tp_plan_shards_fused_expert_weights_and_scales(self) -> None:
+        class Config:
+            base_model_tp_plan = {"layers.*.self_attn.q_proj": "colwise"}
+
+        config = complete_laguna_dgx_tp_plan(Config())
+
+        self.assertEqual(
+            config.base_model_tp_plan["layers.*.mlp.experts.gate_up_proj"],
+            "packed_colwise",
+        )
+        self.assertEqual(
+            config.base_model_tp_plan["layers.*.mlp.experts.gate_up_proj_scale_inv"],
+            "packed_colwise",
+        )
+        self.assertEqual(
+            config.base_model_tp_plan["layers.*.mlp.experts.down_proj_scale_inv"],
+            "rowwise",
+        )
+        self.assertEqual(
+            config.base_model_tp_plan["layers.*.mlp.shared_expert.down_proj"],
+            "rowwise",
+        )
 
     def test_dgx_command_rejects_unknown_operation(self) -> None:
         with self.assertRaisesRegex(ValueError, "unsupported DGX runtime operation"):
