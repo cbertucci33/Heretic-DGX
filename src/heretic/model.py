@@ -9,6 +9,7 @@ from typing import Any, Type, cast
 
 import bitsandbytes as bnb
 import torch
+import torch.distributed as dist
 import torch.linalg as LA
 import torch.nn.functional as F
 from peft import LoraConfig, PeftModel, get_peft_model
@@ -35,6 +36,7 @@ from transformers.generation import (
 from .config import QuantizationMethod, RowNormalization, Settings
 from .model_loading import build_model_load_kwargs
 from .system import empty_cache
+from .tp_capabilities import directional_lora_factors, inspect_lora_target_topologies
 from .utils import Prompt, batchify, format_exception, print
 
 
@@ -188,7 +190,7 @@ class Model:
         # This is more robust than splitting component keys (e.g. "attn.o_proj" -> "o_proj")
         # because hybrid models like Qwen3.5 MoE have modules with different names
         # across layers (e.g. "o_proj" on attention layers, "out_proj" on linear attention layers).
-        target_modules_set: set[str] = set()
+        target_modules_by_name: dict[str, Module] = {}
 
         module_id_to_full_name = {
             id(module): module_name
@@ -200,9 +202,19 @@ class Model:
                 for module in modules:
                     full_name = module_id_to_full_name.get(id(module))
                     if full_name is not None:
-                        target_modules_set.add(full_name)
+                        target_modules_by_name[full_name] = module
 
-        target_modules = sorted(target_modules_set)
+        target_modules = sorted(target_modules_by_name)
+        self._lora_target_topologies_by_base_id: dict[int, str] = {}
+        if self.distributed:
+            topologies = inspect_lora_target_topologies(
+                target_modules_by_name,
+                model_tp_plan=getattr(self.model, "_tp_plan", None),
+            )
+            self._lora_target_topologies_by_base_id = {
+                id(target_modules_by_name[name]): topology
+                for name, topology in topologies.items()
+            }
 
         if self.settings.row_normalization != RowNormalization.FULL:
             # Rank 1 is sufficient for directional ablation without renormalization.
@@ -543,6 +555,43 @@ class Model:
 
                     # Flatten weight matrix to (out_features, in_features).
                     W = W.view(W.shape[0], -1)
+
+                    if self.distributed:
+                        topology = self._lora_target_topologies_by_base_id.get(
+                            id(module.base_layer)
+                        )
+                        if topology not in {"replicated", "rowwise", "colwise"}:
+                            raise ValueError(
+                                "missing supported tensor-parallel topology for LoRA target"
+                            )
+                        if topology != "replicated":
+                            if (
+                                self.settings.row_normalization
+                                == RowNormalization.FULL
+                            ):
+                                raise ValueError(
+                                    "FULL row normalization is not supported for "
+                                    "sharded distributed targets"
+                                )
+
+                            def sum_across_ranks(value: Tensor) -> Tensor:
+                                result = value.clone()
+                                dist.all_reduce(result)
+                                return result
+
+                            factors = directional_lora_factors(
+                                W,
+                                v,
+                                strength=weight,
+                                normalization=self.settings.row_normalization.value,
+                                topology=cast(Any, topology),
+                                sum_across_ranks=sum_across_ranks,
+                            )
+                            weight_A = cast(Tensor, module.lora_A["default"].weight)
+                            weight_B = cast(Tensor, module.lora_B["default"].weight)
+                            weight_A.data = factors.a.to(weight_A.dtype)
+                            weight_B.data = factors.b.to(weight_B.dtype)
+                            continue
 
                     if self.settings.row_normalization == RowNormalization.FULL:
                         # Keep a reference to the original weight matrix so we can subtract it later.

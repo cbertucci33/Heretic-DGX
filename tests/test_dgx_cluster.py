@@ -14,6 +14,11 @@ from heretic.application_runner import (
     preflight_and_collect_rank_applications,
     run_rank_application_plan,
 )
+from heretic.dgx_runtime import (
+    DgxCommand,
+    DgxCoordinatorRuntime,
+    run_dgx_worker,
+)
 from heretic.cluster import load_cluster_config
 from heretic.cluster_cli import launch_cluster_application
 from heretic.collective_probe import CollectiveProbeResult
@@ -465,3 +470,83 @@ rank_address = "10.10.10.2"
         self.assertNotIn("max_memory", distributed)
         for name in ("dtype", "quantization_config", "revision", "trust_remote_code"):
             self.assertEqual(local[name], distributed[name])
+
+    def test_dgx_command_rejects_unknown_operation(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unsupported DGX runtime operation"):
+            DgxCommand("unknown", (), {})  # type: ignore[arg-type]
+
+    def test_coordinator_runtime_mirrors_operation_and_shutdown(self) -> None:
+        class RuntimeFixture:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def get_responses(self, prompts, *, skip_special_tokens=True):
+                self.calls.append(("get_responses", prompts, skip_special_tokens))
+                return ["ok"]
+
+            def shutdown(self):
+                self.calls.append(("shutdown",))
+
+        class ChannelFixture:
+            def __init__(self) -> None:
+                self.commands = []
+
+            def send(self, command):
+                self.commands.append(command)
+
+            def complete(self, local_error):
+                self.asserted_error = local_error
+                return None, None
+
+        local = RuntimeFixture()
+        channel = ChannelFixture()
+        runtime = DgxCoordinatorRuntime(local, channel)  # type: ignore[arg-type]
+
+        self.assertEqual(runtime.get_responses([]), ["ok"])
+        runtime.shutdown()
+
+        self.assertEqual(
+            [command.operation for command in channel.commands],
+            ["get_responses", "shutdown"],
+        )
+        self.assertEqual(local.calls, [("get_responses", [], True), ("shutdown",)])
+
+    def test_worker_executes_commands_and_reports_first_error(self) -> None:
+        class RuntimeFixture:
+            def __init__(self, *, fail=False) -> None:
+                self.calls = []
+                self.fail = fail
+
+            def reset_model(self, model=None):
+                self.calls.append(("reset_model", model))
+                if self.fail:
+                    raise ValueError("worker boom")
+
+            def shutdown(self):
+                self.calls.append(("shutdown",))
+
+        class ChannelFixture:
+            def __init__(self, commands) -> None:
+                self.commands = list(commands)
+                self.completions = []
+
+            def receive(self):
+                return self.commands.pop(0)
+
+            def complete(self, local_error):
+                self.completions.append(local_error)
+                return None, local_error
+
+        local = RuntimeFixture()
+        channel = ChannelFixture(
+            [DgxCommand("reset_model", (None,), {}), DgxCommand("shutdown", (), {})]
+        )
+        run_dgx_worker(local, channel)  # type: ignore[arg-type]
+        self.assertEqual(local.calls, [("reset_model", None), ("shutdown",)])
+        self.assertEqual(channel.completions, [None, None])
+
+        failing = RuntimeFixture(fail=True)
+        failing_channel = ChannelFixture([DgxCommand("reset_model", (None,), {})])
+        with self.assertRaisesRegex(ValueError, "worker boom"):
+            run_dgx_worker(failing, failing_channel)  # type: ignore[arg-type]
+        self.assertEqual(failing_channel.completions, ["ValueError: worker boom"])

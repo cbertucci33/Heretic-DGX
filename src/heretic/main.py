@@ -62,6 +62,7 @@ import math
 import random
 import time
 import warnings
+from collections.abc import Callable
 from dataclasses import asdict
 from importlib.metadata import version
 from os.path import commonprefix
@@ -93,6 +94,7 @@ from .analyzer import Analyzer
 from .config import ExportStrategy, QuantizationMethod
 from .evaluator import Evaluator
 from .model import AbliterationParameters, Model, get_model_class
+from .runtime import LocalModelRuntime, ModelRuntime
 from .reproduce import (
     check_environment,
     collect_reproducibles,
@@ -195,7 +197,25 @@ def obtain_export_strategy(
     )
 
 
-def run():
+def _synchronize_model_settings(
+    settings: Settings,
+    synchronizer: Callable[[Settings | None], Settings | None] | None,
+    *,
+    worker: bool,
+) -> Settings | None:
+    if synchronizer is None:
+        if worker:
+            raise RuntimeError("DGX worker requires finalized settings synchronization")
+        return settings
+    return synchronizer(None if worker else settings)
+
+
+def run(
+    *,
+    runtime_factory: Callable[[Model], ModelRuntime] = LocalModelRuntime,
+    worker_runner: Callable[[Model], None] | None = None,
+    settings_synchronizer: Callable[[Settings | None], Settings | None] | None = None,
+):
     # Enable expandable segments to reduce memory fragmentation on multi-GPU setups.
     if (
         "PYTORCH_ALLOC_CONF" not in os.environ
@@ -275,6 +295,20 @@ def run():
         settings.seed = random.randint(0, 2**32 - 1)
 
     transformers.set_seed(settings.seed)
+
+    if worker_runner is not None:
+        settings = _synchronize_model_settings(
+            settings,
+            settings_synchronizer,
+            worker=True,
+        )
+        if settings is None:
+            return
+        if settings.seed is None:
+            raise RuntimeError("DGX coordinator did not provide a finalized seed")
+        transformers.set_seed(settings.seed)
+        worker_runner(Model(settings))
+        return
 
     print(get_accelerator_info())
 
@@ -403,6 +437,8 @@ def run():
         )
 
         if action is None or action == "":
+            if settings_synchronizer is not None:
+                settings_synchronizer(None)
             return
 
         if action == "continue":
@@ -414,7 +450,15 @@ def run():
             backend = JournalFileBackend(study_checkpoint_file, lock_obj=lock_obj)
             storage = JournalStorage(backend)
 
+    settings = _synchronize_model_settings(
+        settings,
+        settings_synchronizer,
+        worker=False,
+    )
+    if settings is None:
+        raise RuntimeError("DGX coordinator did not retain finalized settings")
     model = Model(settings)
+    runtime = runtime_factory(model)
     print()
     print_memory_usage()
 
@@ -444,10 +488,10 @@ def run():
 
             try:
                 # Warmup run to build the computation graph so that part isn't benchmarked.
-                model.get_responses(prompts)
+                runtime.get_responses_once(prompts)
 
                 start_time = time.perf_counter()
-                responses = model.get_responses(prompts)
+                responses = runtime.get_responses_once(prompts)
                 end_time = time.perf_counter()
             except Exception as error:
                 if batch_size == 1:
@@ -483,7 +527,7 @@ def run():
         print()
         print("Checking for common response prefix...")
         prefix_check_prompts = good_prompts[:100] + bad_prompts[:100]
-        responses = model.get_responses_batched(prefix_check_prompts)
+        responses = runtime.get_responses(prefix_check_prompts)
 
         # Despite being located in os.path, commonprefix actually performs
         # a naive string operation without any path-specific logic,
@@ -506,7 +550,7 @@ def run():
                     # When using a Chain-of-Thought skip, we need to check that the prefix
                     # is actually complete (e.g. not missing a trailing newline).
                     print("* Rechecking with prefix...")
-                    responses = model.get_responses_batched(prefix_check_prompts)
+                    responses = runtime.get_responses(prefix_check_prompts)
                     additional_prefix = commonprefix(responses).rstrip(" ")
                     if additional_prefix:
                         settings.response_prefix += additional_prefix
@@ -518,13 +562,13 @@ def run():
         else:
             print("* None found")
 
-    evaluator = Evaluator(settings, model)
+    evaluator = Evaluator(settings, runtime)
 
     if settings.evaluate_model is not None:
         print()
         print(f"Loading model [bold]{settings.evaluate_model}[/]...")
         settings.model = settings.evaluate_model
-        model.reset_model()
+        runtime.reset_model(settings.evaluate_model)
         print("* Evaluating...")
         print()
         print("[bold]Metrics:[/]")
@@ -548,9 +592,9 @@ def run():
 
     if needs_full_residuals:
         print("* Obtaining residuals for good prompts...")
-        good_residuals = model.get_residuals_batched(good_prompts)
+        good_residuals = runtime.get_residuals(good_prompts)
         print("* Obtaining residuals for bad prompts...")
-        bad_residuals = model.get_residuals_batched(bad_prompts)
+        bad_residuals = runtime.get_residuals(bad_prompts)
 
         good_means = good_residuals.mean(dim=0)
         bad_means = bad_residuals.mean(dim=0)
@@ -567,9 +611,9 @@ def run():
         del good_residuals, bad_residuals, analyzer
     else:
         print("* Obtaining residual mean for good prompts...")
-        good_means = model.get_residuals_mean(good_prompts)
+        good_means = runtime.get_residuals_mean(good_prompts)
         print("* Obtaining residual mean for bad prompts...")
-        bad_means = model.get_residuals_mean(bad_prompts)
+        bad_means = runtime.get_residuals_mean(bad_prompts)
 
     residual_directions = F.normalize(bad_means - good_means, p=2, dim=1)
 
@@ -686,9 +730,9 @@ def run():
         for name, value in get_trial_parameters(trial).items():
             print(f"  * {name} = [bold]{value}[/]")
         print("* Resetting model...")
-        model.reset_model()
+        runtime.reset_model()
         print("* Abliterating...")
-        model.abliterate(residual_directions, direction_index, parameters)
+        runtime.abliterate(residual_directions, direction_index, parameters)
         print("* Evaluating...")
         scores = evaluator.get_scores()
         objective_values = evaluator.get_objective_values(scores)
@@ -929,9 +973,9 @@ def run():
             # to restore the previous LoRA-ified state.
             def reset_trial_model():
                 print("* Resetting model...")
-                model.reset_model()
+                runtime.reset_model()
                 print("* Abliterating...")
-                model.abliterate(
+                runtime.abliterate(
                     residual_directions,
                     trial.user_attrs["direction_index"],
                     {
@@ -1012,7 +1056,7 @@ def run():
 
                             if strategy == ExportStrategy.ADAPTER:
                                 print("Saving LoRA adapter...")
-                                model.model.save_pretrained(
+                                runtime.save_adapter(
                                     save_directory,
                                     max_shard_size=settings.max_shard_size,
                                 )

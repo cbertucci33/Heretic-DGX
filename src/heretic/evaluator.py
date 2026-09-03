@@ -1,17 +1,22 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025-2026  Philipp Emanuel Weidmann <pew@worldwidemann.com> + contributors
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from optuna.study import StudyDirection
 from pydantic import BaseModel
 
 from .config import DatasetSpecification, ScorerConfig, Settings
-from .model import Model
 from .plugin import get_plugin_namespace, is_builtin_plugin, load_plugin
+from .runtime import LocalModelRuntime, ModelRuntime
 from .scorer import Context, Score, Scorer
 from .utils import deep_merge_dicts, parse_study_direction, print
+
+if TYPE_CHECKING:
+    from .model import Model
 
 
 @dataclass
@@ -29,11 +34,29 @@ class Evaluator:
     """
 
     settings: Settings
-    model: Model
+    runtime: ModelRuntime
+    model: Model | None
 
-    def __init__(self, settings: Settings, model: Model):
+    def __init__(
+        self,
+        settings: Settings,
+        model: Model | ModelRuntime | None = None,
+        *,
+        runtime: ModelRuntime | None = None,
+    ) -> None:
+        if model is not None and runtime is not None:
+            raise TypeError("Pass either model or runtime, not both")
+        if runtime is None:
+            if model is None:
+                raise TypeError("Missing required model or runtime")
+            if isinstance(model, ModelRuntime):
+                runtime = model
+            else:
+                runtime = LocalModelRuntime(model)
+
         self.settings = settings
-        self.model = model
+        self.runtime = runtime
+        self.model = runtime._model if isinstance(runtime, LocalModelRuntime) else None
         self._scorer_entries: list[ScorerEntry] = []
 
         print()
@@ -103,7 +126,7 @@ class Evaluator:
             )
 
         # Run scorer init hooks.
-        ctx = Context(settings=self.settings, model=self.model)
+        ctx = Context(settings=self.settings, runtime=self.runtime)
 
         for entry in self._scorer_entries:
             entry.scorer.init(ctx)
@@ -182,7 +205,7 @@ class Evaluator:
         Returns:
             List of `Score` from each scorer and its name.
         """
-        ctx = Context(settings=self.settings, model=self.model)
+        ctx = Context(settings=self.settings, runtime=self.runtime)
         return [
             (entry.name, entry.scorer.get_score(ctx)) for entry in self._scorer_entries
         ]
@@ -194,7 +217,7 @@ class Evaluator:
         Returns:
             List of `Score` from each scorer and its name.
         """
-        ctx = Context(settings=self.settings, model=self.model)
+        ctx = Context(settings=self.settings, runtime=self.runtime)
         return [
             (entry.name, entry.scorer.get_baseline_score(ctx))
             for entry in self._scorer_entries

@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025-2026  Philipp Emanuel Weidmann <pew@worldwidemann.com> + contributors
 
+from __future__ import annotations
+
 import importlib
 import importlib.util
 import inspect
@@ -8,7 +10,16 @@ import sys
 import types
 from pathlib import Path
 from types import ModuleType
-from typing import Annotated, Any, TypeVar, Union, get_args, get_origin, get_type_hints
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    TypeVar,
+    Union,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 from pydantic import BaseModel
 from torch import Tensor
@@ -17,7 +28,10 @@ from heretic.utils import Prompt, load_prompts
 
 from .config import DatasetSpecification
 from .config import Settings as HereticSettings
-from .model import Model
+from .runtime import LocalModelRuntime, ModelRuntime
+
+if TYPE_CHECKING:
+    from .model import Model
 
 T = TypeVar("T")
 
@@ -154,11 +168,27 @@ class Context:
     Provides plugin-safe access to the model.
 
     Plugins must use `get_responses(...)`, `get_logits(...)`, etc.
-    Direct access to the underlying Model is intentionally not exposed.
     """
 
-    def __init__(self, settings: HereticSettings, model: Model) -> None:
-        self._model = model
+    def __init__(
+        self,
+        settings: HereticSettings,
+        model: Model | ModelRuntime | None = None,
+        *,
+        runtime: ModelRuntime | None = None,
+    ) -> None:
+        if model is not None and runtime is not None:
+            raise TypeError("Pass either model or runtime, not both")
+        if runtime is None:
+            if model is None:
+                raise TypeError("Missing required model or runtime")
+            if isinstance(model, ModelRuntime):
+                runtime = model
+            else:
+                runtime = LocalModelRuntime(model)
+
+        self._runtime = runtime
+        self._model = runtime._model if isinstance(runtime, LocalModelRuntime) else None
         self._settings = settings
         self._responses_cache: dict[tuple[tuple[str, str], ...], list[str]] = {}
 
@@ -169,16 +199,16 @@ class Context:
         """Get model responses (cached within this context)."""
         key = self._cache_key(prompts)
         if key not in self._responses_cache:
-            self._responses_cache[key] = self._model.get_responses_batched(
+            self._responses_cache[key] = self._runtime.get_responses(
                 prompts, skip_special_tokens=True
             )
         return self._responses_cache[key]
 
     def get_logits(self, prompts: list[Prompt]) -> Tensor:
-        return self._model.get_logits_batched(prompts)
+        return self._runtime.get_logits(prompts)
 
     def get_residuals(self, prompts: list[Prompt]) -> Tensor:
-        return self._model.get_residuals_batched(prompts)
+        return self._runtime.get_residuals(prompts)
 
     def load_prompts(self, specification: DatasetSpecification) -> list[Prompt]:
         return load_prompts(self._settings, specification)

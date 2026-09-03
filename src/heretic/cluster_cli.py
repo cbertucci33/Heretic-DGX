@@ -51,6 +51,10 @@ def launch_cluster_application(
 
     if settings.cluster is None:
         raise ValueError("cluster application requires --cluster")
+    if getattr(settings, "collect_reproducibles", None) is not None:
+        raise ValueError("--collect-reproducibles is a coordinator-local operation")
+    if getattr(settings, "reproduce", None) is not None:
+        raise ValueError("--reproduce is not yet supported with --cluster")
     if settings.seed is None:
         settings.seed = random.randint(0, 2**32 - 1)
 
