@@ -1,7 +1,7 @@
 [project]
 name = "heretic-llm"
-version = "2.0.0.dev0"
-description = "Fully automatic censorship removal for language models"
+version = "0.1.0"
+description = "Two-node DGX Spark implementation of Heretic"
 readme = "README.md"
 license = "AGPL-3.0-or-later"
 authors = [
@@ -61,11 +61,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://heretic-project.org"
-Documentation = "https://heretic-project.org/tutorial"
-Repository = "https://github.com/p-e-w/heretic.git"
-Issues = "https://github.com/p-e-w/heretic/issues"
-Changelog = "https://github.com/p-e-w/heretic/releases"
+Homepage = "https://github.com/cbertucci33/Heretic-DGX"
+Documentation = "https://github.com/cbertucci33/Heretic-DGX#readme"
+Repository = "https://github.com/cbertucci33/Heretic-DGX.git"
+Issues = "https://github.com/cbertucci33/Heretic-DGX/issues"
+Changelog = "https://github.com/cbertucci33/Heretic-DGX/releases"
 
 [project.scripts]
 heretic = "heretic.main:main"
