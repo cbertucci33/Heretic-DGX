@@ -11,6 +11,8 @@ from .collective_probe import (
     parse_collective_probe_result,
 )
 from .launch_plan import RankLaunchPlan
+from .preflight_collector import collect_rank_preflights
+from .rank_preflight import RankPreflightIdentity
 
 
 def _run_probe_plan(
@@ -64,7 +66,7 @@ def _run_probe_plan(
     return result
 
 
-def collect_rank_collective_probes(
+def _collect_rank_collective_probes(
     plans: tuple[RankLaunchPlan, RankLaunchPlan],
     *,
     timeout_seconds: int,
@@ -101,3 +103,26 @@ def collect_rank_collective_probes(
     if list(ordered) != expected:
         raise RuntimeError("rank collective probe results do not agree")
     return ordered
+
+
+def preflight_and_collect_rank_collective_probes(
+    plans: tuple[RankLaunchPlan, RankLaunchPlan],
+    checkpoint_directory: str,
+    *,
+    timeout_seconds: int,
+) -> tuple[
+    RankPreflightIdentity,
+    tuple[CollectiveProbeResult, CollectiveProbeResult],
+]:
+    """Require matching rank identities before starting the collective probe."""
+
+    identity = collect_rank_preflights(
+        plans,
+        checkpoint_directory,
+        timeout_seconds=timeout_seconds,
+    )
+    results = _collect_rank_collective_probes(
+        plans,
+        timeout_seconds=timeout_seconds,
+    )
+    return identity, results

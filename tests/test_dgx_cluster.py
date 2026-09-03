@@ -12,7 +12,7 @@ from heretic.cluster import load_cluster_config
 from heretic.collective_probe import CollectiveProbeResult
 from heretic.collective_probe_runner import (
     _run_probe_plan,
-    collect_rank_collective_probes,
+    preflight_and_collect_rank_collective_probes,
 )
 from heretic.launch_plan import build_rank_launch_plans
 from heretic.preflight_collector import collect_rank_preflights
@@ -226,7 +226,7 @@ rank_address = "10.10.10.2"
 
         self.assertEqual(run.call_args.args[0][0], "ssh")
 
-    def test_coordinator_collects_matching_collective_probes(self) -> None:
+    def test_coordinator_preflights_before_collective_probe(self) -> None:
         cluster_file = self.root / "cluster.toml"
         cluster_file.write_text(
             'python = "/python"\nworkdir = "/work"\n'
@@ -238,11 +238,37 @@ rank_address = "10.10.10.2"
             load_cluster_config(cluster_file), ("model",), entry_module="entry", seed=1
         )
         results = [CollectiveProbeResult(rank, 2, "gloo", 3) for rank in (0, 1)]
+        events = []
+        identity = object()
 
         with patch(
+            "heretic.collective_probe_runner.collect_rank_preflights",
+            side_effect=lambda *_, **__: events.append("preflight") or identity,
+        ), patch(
             "heretic.collective_probe_runner._run_probe_plan",
-            side_effect=lambda plan, **_: results[plan.rank],
+            side_effect=lambda plan, **_: events.append(f"rank-{plan.rank}")
+            or results[plan.rank],
         ):
-            collected = collect_rank_collective_probes(plans, timeout_seconds=30)
+            preflight, collected = preflight_and_collect_rank_collective_probes(
+                plans,
+                "/checkpoint",
+                timeout_seconds=30,
+            )
 
+        self.assertIs(preflight, identity)
         self.assertEqual(collected, tuple(results))
+        self.assertEqual(events[0], "preflight")
+
+        with patch(
+            "heretic.collective_probe_runner.collect_rank_preflights",
+            side_effect=RuntimeError("identity mismatch"),
+        ), patch(
+            "heretic.collective_probe_runner._run_probe_plan"
+        ) as run_probe:
+            with self.assertRaisesRegex(RuntimeError, "identity mismatch"):
+                preflight_and_collect_rank_collective_probes(
+                    plans,
+                    "/checkpoint",
+                    timeout_seconds=30,
+                )
+        run_probe.assert_not_called()
