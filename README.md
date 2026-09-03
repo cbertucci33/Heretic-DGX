@@ -5,6 +5,29 @@ Heretic DGX is a two-node NVIDIA DGX Spark implementation of
 directional-ablation optimization across exactly two DGX Spark systems and
 exports a standalone checkpoint.
 
+## Relationship to the original Heretic project
+
+This repository is an independent downstream fork of Philipp Emanuel
+Weidmann's original
+[`p-e-w/heretic`](https://github.com/p-e-w/heretic), based on upstream commit
+[`bedb94e`](https://github.com/p-e-w/heretic/commit/bedb94ef117a271532ac2058447fbc165d5051bd).
+Heretic's abliteration method, scorer model, optimization approach, and core
+configuration remain upstream work.
+
+Heretic DGX adds the distributed execution layer needed to run that workflow
+across two DGX Spark systems:
+
+- coordinator-driven launch and rank supervision;
+- source, checkpoint, topology, and collective preflight checks;
+- mirrored prompt, residual, scoring, and optimization operations;
+- coordinated cancellation, failure reporting, and teardown; and
+- standalone export that verifies target changes while preserving quantized
+  and non-target artifacts.
+
+For the original single-system project, documentation, and community, use the
+[upstream Heretic repository](https://github.com/p-e-w/heretic). Issues specific
+to the two-DGX implementation belong in this repository.
+
 ## Release 0.1 scope
 
 - One coordinator command launches one GPU-backed rank on each of two nodes.
@@ -108,9 +131,9 @@ KL divergence and automated checks are limited indicators, not substitutes for
 broad evaluation. Review the source model's license and usage restrictions
 before creating or distributing a derivative.
 
-## Upstream and license
+## Attribution and license
 
-Heretic DGX is based on upstream Heretic commit
-[`bedb94e`](https://github.com/p-e-w/heretic/commit/bedb94ef117a271532ac2058447fbc165d5051bd)
-and retains its AGPL-3.0-or-later license. The distributed implementation and
-release-specific changes are maintained in this repository.
+Heretic DGX retains the original project's AGPL-3.0-or-later license and
+copyright notices. The two-node distributed implementation and release-specific
+changes are maintained in this repository. Heretic DGX is not presented as an
+official upstream release.
