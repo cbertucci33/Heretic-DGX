@@ -18,6 +18,7 @@ DgxOperation = Literal[
     "reset_model",
     "abliterate",
     "save_adapter",
+    "save_merged",
     "get_responses_once",
     "get_responses",
     "get_logits",
@@ -157,6 +158,9 @@ class DgxCoordinatorRuntime(ModelRuntime):
 
     def save_adapter(self, directory: str, *, max_shard_size: int | str) -> None:
         self._invoke("save_adapter", directory, max_shard_size=max_shard_size)
+
+    def save_merged(self, directory: str, *, max_shard_size: int | str) -> None:
+        self._invoke("save_merged", directory, max_shard_size=max_shard_size)
 
     def get_responses_once(
         self,

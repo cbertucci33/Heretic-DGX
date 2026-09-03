@@ -35,6 +35,9 @@ class _RecordingRuntime(ModelRuntime):
     def save_adapter(self, directory: str, *, max_shard_size: int | str) -> None:
         self.calls.append("save_adapter")
 
+    def save_merged(self, directory: str, *, max_shard_size: int | str) -> None:
+        self.calls.append("save_merged")
+
     def get_responses_once(
         self,
         prompts,
@@ -95,6 +98,7 @@ def _gloo_runtime_entry(rank: int, port: int, results: Any) -> None:
         if rank == 0:
             runtime = DgxCoordinatorRuntime(local, channel)
             logits = runtime.get_logits([Prompt(system="system", user="user")])
+            runtime.save_merged("model", max_shard_size="5GB")
             runtime.shutdown()
             results.put((rank, logits.tolist(), local.calls))
         else:
@@ -146,7 +150,7 @@ class DgxRuntimeTests(TestCase):
         self.assertEqual(
             observed,
             [
-                (0, [[1.0, 2.0]], ["get_logits", "shutdown"]),
-                (1, None, ["get_logits", "shutdown"]),
+                (0, [[1.0, 2.0]], ["get_logits", "save_merged", "shutdown"]),
+                (1, None, ["get_logits", "save_merged", "shutdown"]),
             ],
         )

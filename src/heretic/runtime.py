@@ -41,6 +41,9 @@ class ModelRuntime(ABC):
     def save_adapter(self, directory: str, *, max_shard_size: int | str) -> None: ...
 
     @abstractmethod
+    def save_merged(self, directory: str, *, max_shard_size: int | str) -> None: ...
+
+    @abstractmethod
     def get_responses_once(
         self,
         prompts: list[Prompt],
@@ -127,6 +130,28 @@ class LocalModelRuntime(ModelRuntime):
         finally:
             with suppress(OSError):
                 shutil.rmtree(sink)
+
+    def save_merged(self, directory: str, *, max_shard_size: int | str) -> None:
+        self._require_active()
+        merged_model = self._model.get_merged_model()
+        rank = dist.get_rank() if self._model.distributed else 0
+        sink = directory
+        temporary_sink = False
+        if rank != 0:
+            sink = tempfile.mkdtemp(prefix=f"heretic-merged-rank-{rank}-")
+            temporary_sink = True
+        try:
+            merged_model.save_pretrained(
+                sink,
+                max_shard_size=max_shard_size,
+                is_main_process=rank == 0,
+            )
+        finally:
+            del merged_model
+            empty_cache()
+            if temporary_sink:
+                with suppress(OSError):
+                    shutil.rmtree(sink)
 
     def get_responses_once(
         self,

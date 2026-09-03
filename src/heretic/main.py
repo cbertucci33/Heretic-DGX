@@ -1062,13 +1062,10 @@ def run(
                                 )
                             else:
                                 print("Saving merged model...")
-                                merged_model = model.get_merged_model()
-                                merged_model.save_pretrained(
+                                runtime.save_merged(
                                     save_directory,
                                     max_shard_size=settings.max_shard_size,
                                 )
-                                del merged_model
-                                empty_cache()
                                 model.tokenizer.save_pretrained(save_directory)
                                 if model.processor is not None:
                                     model.processor.save_pretrained(save_directory)
