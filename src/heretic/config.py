@@ -2,6 +2,7 @@
 # Copyright (C) 2025-2026  Philipp Emanuel Weidmann <pew@worldwidemann.com> + contributors
 
 from enum import Enum
+import sys
 from typing import Dict, Literal
 
 from pydantic import (
@@ -156,6 +157,12 @@ class BenchmarkSpecification(BaseModel):
 
 class Settings(BaseSettings):
     model: str = Field(description="Hugging Face model ID, or path to model on disk.")
+
+    config: str = Field(
+        default="config.toml",
+        description="Path to the TOML configuration file.",
+        exclude=True,
+    )
 
     cluster: str | None = Field(
         default=None,
@@ -592,5 +599,29 @@ class Settings(BaseSettings):
             EnvSettingsSource(settings_cls, env_prefix="HERETIC_"),
             dotenv_settings,
             file_secret_settings,
-            TomlConfigSettingsSource(settings_cls, toml_file="config.toml"),
+            TomlConfigSettingsSource(
+                settings_cls,
+                toml_file=_config_path_from_argv(sys.argv),
+            ),
         )
+
+
+def _config_path_from_argv(argv: list[str]) -> str:
+    """Select one TOML file without consuming the CLI parser's arguments."""
+
+    selected_path = "config.toml"
+    index = 1
+    while index < len(argv):
+        argument = argv[index]
+        if argument == "--config":
+            if index + 1 >= len(argv) or argv[index + 1].startswith("-"):
+                raise ValueError("--config requires a path")
+            selected_path = argv[index + 1]
+            index += 2
+            continue
+        if argument.startswith("--config="):
+            selected_path = argument.split("=", 1)[1]
+            if not selected_path:
+                raise ValueError("--config requires a non-empty path")
+        index += 1
+    return selected_path

@@ -5,7 +5,7 @@ import unittest
 
 from pydantic import ValidationError
 
-from heretic.config import ScorerConfig
+from heretic.config import ScorerConfig, _config_path_from_argv
 
 
 class ScorerConfigTests(unittest.TestCase):
@@ -17,6 +17,20 @@ class ScorerConfigTests(unittest.TestCase):
         )
 
         self.assertEqual(config.instance_name, "small-1")
+
+    def test_selects_explicit_config_path(self) -> None:
+        self.assertEqual(
+            _config_path_from_argv(["heretic", "--config", "/tmp/run.toml"]),
+            "/tmp/run.toml",
+        )
+        self.assertEqual(
+            _config_path_from_argv(["heretic", "--config=/tmp/other.toml"]),
+            "/tmp/other.toml",
+        )
+
+    def test_rejects_missing_config_path(self) -> None:
+        with self.assertRaisesRegex(ValueError, "requires a path"):
+            _config_path_from_argv(["heretic", "--config"])
 
     def test_rejects_empty_instance_name(self) -> None:
         with self.assertRaises(ValidationError):
