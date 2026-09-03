@@ -126,6 +126,26 @@ After Heretic has finished decensoring a model, you are given the option to
 save the model, upload it to Hugging Face, chat with it to test how well it works,
 run standard benchmarks on it, or any combination of those actions.
 
+### Two-node DGX Spark operation
+
+This fork supports one coordinator command across exactly two DGX Spark nodes.
+Start from identical clean checkouts on both nodes, copy and complete
+[`cluster.example.toml`](cluster.example.toml), and keep the cluster file outside
+the repository. On the coordinator, run with explicit cluster, application
+configuration, and model paths:
+
+```sh
+/home/cb/src/heretic-dgx-rebuild/.venv/bin/heretic \
+  --cluster /home/cb/.config/heretic/cluster.toml \
+  --config /absolute/path/to/heretic-run.toml \
+  --model /absolute/path/to/model
+```
+
+The coordinator preflights both source trees and checkpoint payloads before
+launching either rank. A mismatch, timeout, or rank failure stops the run and
+returns a nonzero exit status. The cluster runtime currently requires NCCL and
+exactly one GPU-backed rank per node.
+
 
 ## Research features
 
