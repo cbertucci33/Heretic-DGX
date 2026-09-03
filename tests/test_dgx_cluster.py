@@ -363,6 +363,27 @@ rank_address = "10.10.10.2"
         self.assertIn("model load failed", str(raised.exception))
         self.assertIn("traceback", str(raised.exception))
 
+    def test_rank_application_preserves_each_stream_when_stderr_is_long(self) -> None:
+        plan = RankLaunchPlan(
+            rank=0,
+            role="coordinator",
+            host="local",
+            argv=(
+                sys.executable,
+                "-c",
+                "import sys; print('stdout failure detail'); "
+                "print('x' * 9000, file=sys.stderr); raise SystemExit(7)",
+            ),
+            workdir=str(self.root),
+            environment=(),
+        )
+
+        with self.assertRaises(RuntimeError) as raised:
+            run_rank_application_plan(plan, timeout_seconds=5)
+
+        self.assertIn("stdout failure detail", str(raised.exception))
+        self.assertIn("x" * 8000, str(raised.exception))
+
     def test_rank_applications_do_not_start_when_preflight_fails(self) -> None:
         plans = (
             RankLaunchPlan(0, "coordinator", "a", ("/python",), "/work", ()),

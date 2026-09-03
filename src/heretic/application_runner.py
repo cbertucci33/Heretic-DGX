@@ -26,13 +26,13 @@ class RankApplicationResult:
 
 
 def _failure_detail(stdout: str, stderr: str) -> str:
-    """Retain diagnostic output from both streams for a failed rank."""
+    """Retain the tail of each diagnostic stream for a failed rank."""
     parts = []
     if stdout.strip():
-        parts.append(f"stdout:\n{stdout.strip()}")
+        parts.append(f"stdout:\n{stdout.strip()[-8000:]}")
     if stderr.strip():
-        parts.append(f"stderr:\n{stderr.strip()}")
-    return "\n".join(parts)[-8000:]
+        parts.append(f"stderr:\n{stderr.strip()[-8000:]}")
+    return "\n".join(parts)
 
 
 def run_rank_application_plan(
