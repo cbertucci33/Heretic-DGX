@@ -168,9 +168,13 @@ rank_address = "10.10.10.2"
             for identity in outputs
         ]
 
-        with patch("heretic.preflight_collector.subprocess.run", side_effect=completed):
+        with patch(
+            "heretic.preflight_collector.subprocess.run", side_effect=completed
+        ) as run:
             result = collect_rank_preflights(
                 plans, "/models/checkpoint", timeout_seconds=30
             )
 
         self.assertEqual(result, outputs[0])
+        self.assertEqual(run.call_args_list[0].args[0][0], "env")
+        self.assertEqual(run.call_args_list[1].args[0][0], "ssh")

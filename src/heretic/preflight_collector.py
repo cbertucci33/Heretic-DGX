@@ -39,18 +39,21 @@ def collect_rank_preflights(
             plan.workdir,
             str(checkpoint_directory),
         )
+        command = remote_argv
+        if plan.rank == 1:
+            command = (
+                "ssh",
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "ConnectTimeout=10",
+                "--",
+                plan.host,
+                shlex.join(remote_argv),
+            )
         try:
             result = subprocess.run(
-                (
-                    "ssh",
-                    "-o",
-                    "BatchMode=yes",
-                    "-o",
-                    "ConnectTimeout=10",
-                    "--",
-                    plan.host,
-                    shlex.join(remote_argv),
-                ),
+                command,
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
