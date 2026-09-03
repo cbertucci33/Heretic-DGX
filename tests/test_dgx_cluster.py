@@ -2,12 +2,15 @@
 
 from dataclasses import replace
 from pathlib import Path
+import subprocess
 from tempfile import TemporaryDirectory
 from unittest import TestCase
+from unittest.mock import patch
 
 from heretic.checkpoint_identity import build_checkpoint_payload_identity
 from heretic.cluster import load_cluster_config
 from heretic.launch_plan import build_rank_launch_plans
+from heretic.preflight_collector import collect_rank_preflights
 from heretic.rank_environment import read_rank_environment
 from heretic.rank_preflight import (
     RankPreflightIdentity,
@@ -142,3 +145,32 @@ rank_address = "10.10.10.2"
         )
         with self.assertRaisesRegex(RuntimeError, "checkpoint-payload"):
             require_matching_rank_preflights(rank_zero, mismatched)
+
+    def test_coordinator_collects_matching_rank_preflights(self) -> None:
+        cluster_file = self.root / "cluster.toml"
+        cluster_file.write_text(
+            'python = "/python"\nworkdir = "/work"\n'
+            '[[nodes]]\nhost = "a"\nrank_address = "10.0.0.1"\n'
+            '[[nodes]]\nhost = "b"\nrank_address = "10.0.0.2"\n',
+            encoding="utf-8",
+        )
+        plans = build_rank_launch_plans(
+            load_cluster_config(cluster_file), ("model",), entry_module="entry", seed=1
+        )
+        source = _source(self.root / "source")
+        checkpoint = _checkpoint(self.root / "checkpoint")
+        outputs = [
+            RankPreflightIdentity(rank=rank, source=source, checkpoint=checkpoint)
+            for rank in (0, 1)
+        ]
+        completed = [
+            subprocess.CompletedProcess((), 0, identity.canonical_json(), "")
+            for identity in outputs
+        ]
+
+        with patch("heretic.preflight_collector.subprocess.run", side_effect=completed):
+            result = collect_rank_preflights(
+                plans, "/models/checkpoint", timeout_seconds=30
+            )
+
+        self.assertEqual(result, outputs[0])

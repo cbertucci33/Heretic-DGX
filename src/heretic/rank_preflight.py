@@ -11,6 +11,7 @@ from pathlib import Path
 import sys
 
 from .checkpoint_identity import (
+    CheckpointFileIdentity,
     CheckpointPayloadIdentity,
     build_checkpoint_payload_identity,
 )
@@ -58,6 +59,28 @@ def require_matching_rank_preflights(
     if first.checkpoint != second.checkpoint:
         raise RuntimeError("rank checkpoint-payload identities do not match")
     return first
+
+
+def parse_rank_preflight_identity(payload: str) -> RankPreflightIdentity:
+    """Parse the canonical single-record output emitted by a rank preflight."""
+
+    try:
+        raw = json.loads(payload)
+        source = SourceIdentity(**raw["source"])
+        checkpoint = CheckpointPayloadIdentity(
+            files=tuple(
+                CheckpointFileIdentity(**file) for file in raw["checkpoint"]["files"]
+            ),
+            digest=raw["checkpoint"]["digest"],
+        )
+        identity = RankPreflightIdentity(
+            rank=raw["rank"], source=source, checkpoint=checkpoint
+        )
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        raise ValueError("invalid rank preflight output") from error
+    if identity.canonical_json() != payload.strip():
+        raise ValueError("rank preflight output must be canonical JSON")
+    return identity
 
 
 def main(argv: list[str] | None = None) -> int:
