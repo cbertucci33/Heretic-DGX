@@ -9,6 +9,11 @@ from unittest.mock import patch
 
 from heretic.checkpoint_identity import build_checkpoint_payload_identity
 from heretic.cluster import load_cluster_config
+from heretic.collective_probe import CollectiveProbeResult
+from heretic.collective_probe_runner import (
+    _run_probe_plan,
+    collect_rank_collective_probes,
+)
 from heretic.launch_plan import build_rank_launch_plans
 from heretic.preflight_collector import collect_rank_preflights
 from heretic.rank_environment import read_rank_environment
@@ -178,3 +183,66 @@ rank_address = "10.10.10.2"
         self.assertEqual(result, outputs[0])
         self.assertEqual(run.call_args_list[0].args[0][0], "env")
         self.assertEqual(run.call_args_list[1].args[0][0], "ssh")
+
+    def test_collective_probe_runs_coordinator_locally_and_worker_over_ssh(self) -> None:
+        cluster_file = self.root / "cluster.toml"
+        cluster_file.write_text(
+            'python = "/python"\nworkdir = "/work"\n'
+            'nccl_socket_ifname = "fabric0"\n'
+            '[[nodes]]\nhost = "a"\nrank_address = "10.0.0.1"\n'
+            '[[nodes]]\nhost = "b"\nrank_address = "10.0.0.2"\n',
+            encoding="utf-8",
+        )
+        plans = build_rank_launch_plans(
+            load_cluster_config(cluster_file), ("model",), entry_module="entry", seed=1
+        )
+        completed = subprocess.CompletedProcess(
+            (),
+            0,
+            CollectiveProbeResult(0, 2, "gloo", 3).canonical_json(),
+            "",
+        )
+
+        with patch(
+            "heretic.collective_probe_runner.subprocess.run", return_value=completed
+        ) as run:
+            _run_probe_plan(plans[0], timeout_seconds=30)
+
+        command = run.call_args.args[0]
+        self.assertEqual(command[0], "env")
+        self.assertIn("CUDA_VISIBLE_DEVICES=", command)
+        self.assertIn("GLOO_SOCKET_IFNAME=fabric0", command)
+
+        completed = subprocess.CompletedProcess(
+            (),
+            0,
+            CollectiveProbeResult(1, 2, "gloo", 3).canonical_json(),
+            "",
+        )
+        with patch(
+            "heretic.collective_probe_runner.subprocess.run", return_value=completed
+        ) as run:
+            _run_probe_plan(plans[1], timeout_seconds=30)
+
+        self.assertEqual(run.call_args.args[0][0], "ssh")
+
+    def test_coordinator_collects_matching_collective_probes(self) -> None:
+        cluster_file = self.root / "cluster.toml"
+        cluster_file.write_text(
+            'python = "/python"\nworkdir = "/work"\n'
+            '[[nodes]]\nhost = "a"\nrank_address = "10.0.0.1"\n'
+            '[[nodes]]\nhost = "b"\nrank_address = "10.0.0.2"\n',
+            encoding="utf-8",
+        )
+        plans = build_rank_launch_plans(
+            load_cluster_config(cluster_file), ("model",), entry_module="entry", seed=1
+        )
+        results = [CollectiveProbeResult(rank, 2, "gloo", 3) for rank in (0, 1)]
+
+        with patch(
+            "heretic.collective_probe_runner._run_probe_plan",
+            side_effect=lambda plan, **_: results[plan.rank],
+        ):
+            collected = collect_rank_collective_probes(plans, timeout_seconds=30)
+
+        self.assertEqual(collected, tuple(results))

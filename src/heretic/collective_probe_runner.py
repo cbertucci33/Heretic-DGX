@@ -1,0 +1,103 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import shlex
+import subprocess
+
+from .collective_probe import (
+    CollectiveProbeResult,
+    parse_collective_probe_result,
+)
+from .launch_plan import RankLaunchPlan
+
+
+def _run_probe_plan(
+    plan: RankLaunchPlan, *, timeout_seconds: int
+) -> CollectiveProbeResult:
+    environment = dict(plan.environment)
+    environment["CUDA_VISIBLE_DEVICES"] = ""
+    if socket_ifname := environment.get("NCCL_SOCKET_IFNAME"):
+        environment["GLOO_SOCKET_IFNAME"] = socket_ifname
+    rank_argv = (
+        "env",
+        *(f"{name}={value}" for name, value in sorted(environment.items())),
+        plan.argv[0],
+        "-m",
+        "heretic.collective_probe",
+    )
+    command = rank_argv
+    if plan.rank == 1:
+        command = (
+            "ssh",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "ConnectTimeout=10",
+            "--",
+            plan.host,
+            shlex.join(rank_argv),
+        )
+    try:
+        completed = subprocess.run(
+            command,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(f"rank {plan.rank} collective probe timed out") from error
+    if completed.returncode != 0:
+        detail = completed.stderr.strip()[-2000:]
+        raise RuntimeError(
+            f"rank {plan.rank} collective probe failed with exit code "
+            f"{completed.returncode}: {detail}"
+        )
+    result = parse_collective_probe_result(completed.stdout.strip())
+    if result.rank != plan.rank:
+        raise RuntimeError(
+            f"rank {plan.rank} collective probe reported rank {result.rank}"
+        )
+    return result
+
+
+def collect_rank_collective_probes(
+    plans: tuple[RankLaunchPlan, RankLaunchPlan],
+    *,
+    timeout_seconds: int,
+) -> tuple[CollectiveProbeResult, CollectiveProbeResult]:
+    """Run two CPU-only ranks concurrently and require a successful all-reduce."""
+
+    if tuple(plan.rank for plan in plans) != (0, 1):
+        raise ValueError("rank launch plans must be ordered as rank 0 then rank 1")
+    if type(timeout_seconds) is not int or timeout_seconds <= 0:
+        raise ValueError("collective probe timeout must be a positive integer")
+
+    results: dict[int, CollectiveProbeResult] = {}
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = {
+            executor.submit(
+                _run_probe_plan, plan, timeout_seconds=timeout_seconds
+            ): plan.rank
+            for plan in plans
+        }
+        for future in as_completed(futures):
+            result = future.result()
+            results[result.rank] = result
+
+    ordered = results[0], results[1]
+    expected = [
+        CollectiveProbeResult(
+            rank=rank,
+            world_size=2,
+            backend="gloo",
+            reduced_value=3,
+        )
+        for rank in (0, 1)
+    ]
+    if list(ordered) != expected:
+        raise RuntimeError("rank collective probe results do not agree")
+    return ordered
