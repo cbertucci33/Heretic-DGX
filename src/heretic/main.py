@@ -3,6 +3,7 @@
 
 # ruff: noqa: E402
 
+import os
 import sys
 
 # Ensure standard output/error use UTF-8 instead of system default charmap (e.g. cp1252 on Windows).
@@ -16,6 +17,17 @@ for stream in (sys.stdout, sys.stderr):
 from .config import Settings
 
 
+def _normalize_positional_model() -> None:
+    if (
+        len(sys.argv) > 1
+        and "--collect-reproducibles" not in sys.argv
+        and "--reproduce" not in sys.argv
+        and "--model" not in sys.argv
+        and not sys.argv[-1].startswith("-")
+    ):
+        sys.argv.insert(-1, "--model")
+
+
 def _is_help_invocation() -> bool:
     args = sys.argv[1:]
     return "-h" in args or "--help" in args
@@ -24,6 +36,16 @@ def _is_help_invocation() -> bool:
 # Parse and handle CLI help before importing heavyweight ML/runtime dependencies.
 if _is_help_invocation():
     Settings()  # ty:ignore[missing-argument]
+
+_normalize_positional_model()
+
+# The coordinator must exit before heavyweight ML imports. Rank processes set
+# HERETIC_DGX_ACTIVE and enter through heretic.rank_application instead.
+if os.environ.get("HERETIC_DGX_ACTIVE") != "1":
+    from .cluster_cli import has_cluster_option, run_cluster_cli
+
+    if has_cluster_option(sys.argv[1:]):
+        raise SystemExit(run_cluster_cli(sys.argv[1:]))
 
 # FIXME: Rich progress bars are currently disabled because of rendering issues
 #        when used from multiple threads in parallel (e.g. by huggingface_hub).
@@ -37,7 +59,6 @@ patch_tqdm()
 
 import logging
 import math
-import os
 import random
 import time
 import warnings
@@ -191,20 +212,6 @@ def run():
         "[cyan]▀░▀░▀▀▀░▀░▀░▀▀▀░░▀░░▀░▀▀▀[/]  [blue underline]https://github.com/p-e-w/heretic[/]"
     )
     print()
-
-    if (
-        # There is at least one argument (argv[0] is the program name).
-        len(sys.argv) > 1
-        # Heretic is being invoked in standard (model processing) mode.
-        and "--collect-reproducibles" not in sys.argv
-        and "--reproduce" not in sys.argv
-        # No model has been explicitly provided.
-        and "--model" not in sys.argv
-        # The last argument is a parameter value rather than a flag (such as "--help").
-        and not sys.argv[-1].startswith("-")
-    ):
-        # Assume the last argument is the model.
-        sys.argv.insert(-1, "--model")
 
     # Work around the "model" argument being required
     # when Heretic is invoked in a non-processing mode.

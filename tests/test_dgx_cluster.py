@@ -15,6 +15,7 @@ from heretic.application_runner import (
     run_rank_application_plan,
 )
 from heretic.cluster import load_cluster_config
+from heretic.cluster_cli import launch_cluster_application
 from heretic.collective_probe import CollectiveProbeResult
 from heretic.collective_probe_runner import (
     _run_probe_plan,
@@ -24,6 +25,7 @@ from heretic.launch_plan import build_rank_launch_plans
 from heretic.launch_plan import RankLaunchPlan
 from heretic.preflight_collector import collect_rank_preflights
 from heretic.rank_environment import read_rank_environment
+from heretic.rank_application import run_rank_application
 from heretic.rank_preflight import (
     RankPreflightIdentity,
     require_matching_rank_preflights,
@@ -353,3 +355,90 @@ rank_address = "10.10.10.2"
         while time.monotonic() < deadline and Path(f"/proc/{child_pid}").exists():
             time.sleep(0.05)
         self.assertFalse(Path(f"/proc/{child_pid}").exists())
+
+    def test_rank_entry_preserves_arguments_and_seed_without_recursion(self) -> None:
+        cluster_file = self.root / "cluster.toml"
+        cluster_file.write_text(
+            'python = "/python"\nworkdir = "/work"\n'
+            '[[nodes]]\nhost = "a"\nrank_address = "10.0.0.1"\n'
+            '[[nodes]]\nhost = "b"\nrank_address = "10.0.0.2"\n',
+            encoding="utf-8",
+        )
+        plan = build_rank_launch_plans(
+            load_cluster_config(cluster_file),
+            ("--model", "/checkpoint", "--max-tokens", "23"),
+            entry_module="heretic.rank_application",
+            seed=91,
+        )[1]
+        called = []
+
+        environment, result = run_rank_application(
+            plan.argv[3:],
+            environment=plan.environment_dict(),
+            application_main=lambda: called.append(tuple(sys.argv[1:])) or 7,
+        )
+
+        self.assertEqual(environment.rank, 1)
+        self.assertEqual(result, 7)
+        self.assertEqual(
+            called,
+            [("--model", "/checkpoint", "--max-tokens", "23", "--seed", "91")],
+        )
+
+        with self.assertRaisesRegex(ValueError, "must not contain --cluster"):
+            run_rank_application(
+                ("--model", "/checkpoint", "--cluster", "cluster.toml", "--seed", "91"),
+                environment=plan.environment_dict(),
+                application_main=lambda: 0,
+            )
+
+    def test_cluster_cli_preflights_once_and_propagates_rank_failure(self) -> None:
+        cluster_file = self.root / "cluster.toml"
+        cluster_file.write_text(
+            'python = "/python"\nworkdir = "/work"\ntimeout_seconds = 17\n'
+            '[[nodes]]\nhost = "a"\nrank_address = "10.0.0.1"\n'
+            '[[nodes]]\nhost = "b"\nrank_address = "10.0.0.2"\n',
+            encoding="utf-8",
+        )
+        settings = type("SettingsFixture", (), {})()
+        settings.cluster = str(cluster_file)
+        settings.seed = 44
+        settings.model = "/checkpoint"
+
+        with patch(
+            "heretic.cluster_cli.preflight_and_collect_rank_applications",
+            side_effect=RuntimeError("rank 1 application failed"),
+        ) as launch:
+            with self.assertRaisesRegex(RuntimeError, "rank 1 application failed"):
+                launch_cluster_application(
+                    settings,
+                    (
+                        "--cluster",
+                        str(cluster_file),
+                        "--model",
+                        "/checkpoint",
+                        "--seed=44",
+                        "--max-tokens",
+                        "23",
+                    ),
+                )
+
+        plans = launch.call_args.args[0]
+        self.assertEqual(launch.call_count, 1)
+        self.assertEqual(launch.call_args.args[1], "/checkpoint")
+        self.assertEqual(launch.call_args.kwargs["timeout_seconds"], 17)
+        self.assertEqual(plans[0].argv, plans[1].argv)
+        self.assertEqual(
+            plans[0].argv,
+            (
+                "/python",
+                "-m",
+                "heretic.rank_application",
+                "--model",
+                "/checkpoint",
+                "--max-tokens",
+                "23",
+                "--seed",
+                "44",
+            ),
+        )
