@@ -23,6 +23,7 @@ from heretic.collective_probe_runner import (
 )
 from heretic.launch_plan import build_rank_launch_plans
 from heretic.launch_plan import RankLaunchPlan
+from heretic.model_loading import build_model_load_kwargs
 from heretic.preflight_collector import collect_rank_preflights
 from heretic.rank_environment import read_rank_environment
 from heretic.rank_application import run_rank_application
@@ -442,3 +443,25 @@ rank_address = "10.10.10.2"
                 "44",
             ),
         )
+
+    def test_model_load_arguments_select_one_local_or_tp_path(self) -> None:
+        common = {
+            "dtype": "bfloat16",
+            "quantization_config": "quantization",
+            "model_commit": "revision",
+            "device_map": "auto",
+            "max_memory": {"0": "100GB", "cpu": "20GB"},
+            "trust_remote_code": True,
+        }
+
+        local = build_model_load_kwargs(distributed=False, **common)
+        distributed = build_model_load_kwargs(distributed=True, **common)
+
+        self.assertEqual(local["device_map"], "auto")
+        self.assertEqual(local["max_memory"], {0: "100GB", "cpu": "20GB"})
+        self.assertNotIn("tp_plan", local)
+        self.assertEqual(distributed["tp_plan"], "auto")
+        self.assertNotIn("device_map", distributed)
+        self.assertNotIn("max_memory", distributed)
+        for name in ("dtype", "quantization_config", "revision", "trust_remote_code"):
+            self.assertEqual(local[name], distributed[name])

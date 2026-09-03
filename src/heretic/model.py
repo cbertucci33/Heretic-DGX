@@ -2,6 +2,7 @@
 # Copyright (C) 2025-2026  Philipp Emanuel Weidmann <pew@worldwidemann.com> + contributors
 
 import math
+import os
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any, Type, cast
@@ -32,6 +33,7 @@ from transformers.generation import (
 )
 
 from .config import QuantizationMethod, RowNormalization, Settings
+from .model_loading import build_model_load_kwargs
 from .system import empty_cache
 from .utils import Prompt, batchify, format_exception, print
 
@@ -97,11 +99,7 @@ class Model:
         self.tokenizer.padding_side = "left"
 
         self.model = None  # ty:ignore[invalid-assignment]
-        self.max_memory = (
-            {int(k) if k.isdigit() else k: v for k, v in settings.max_memory.items()}
-            if settings.max_memory
-            else None
-        )
+        self.distributed = os.environ.get("HERETIC_DGX_ACTIVE") == "1"
 
         self.trusted_models = set()
 
@@ -111,22 +109,17 @@ class Model:
             try:
                 quantization_config = self._get_quantization_config(dtype)
 
-                extra_kwargs = {}
-                # Only include quantization_config if it's not None
-                # (some models like gpt-oss have issues with explicit None).
-                if quantization_config is not None:
-                    extra_kwargs["quantization_config"] = quantization_config
-
                 self.model = get_model_class(settings.model).from_pretrained(
                     settings.model,
-                    dtype=dtype,
-                    device_map=settings.device_map,
-                    max_memory=self.max_memory,
-                    trust_remote_code=True
-                    if settings.model in self.trusted_models
-                    else None,
-                    **self.revision_kwargs,
-                    **extra_kwargs,
+                    **build_model_load_kwargs(
+                        dtype=dtype,
+                        quantization_config=quantization_config,
+                        distributed=self.distributed,
+                        model_commit=settings.model_commit,
+                        device_map=settings.device_map,
+                        max_memory=settings.max_memory,
+                        trust_remote_code=settings.model in self.trusted_models,
+                    ),
                 )
 
                 self.dtype = self.model.dtype
@@ -343,21 +336,17 @@ class Model:
             str(self.dtype).split(".")[-1]
         )
 
-        # Build kwargs, only include quantization_config if it's not None.
-        extra_kwargs = {}
-        if quantization_config is not None:
-            extra_kwargs["quantization_config"] = quantization_config
-
         self.model = get_model_class(self.settings.model).from_pretrained(
             self.settings.model,
-            dtype=self.dtype,
-            device_map=self.settings.device_map,
-            max_memory=self.max_memory,
-            trust_remote_code=True
-            if self.settings.model in self.trusted_models
-            else None,
-            **self.revision_kwargs,
-            **extra_kwargs,
+            **build_model_load_kwargs(
+                dtype=self.dtype,
+                quantization_config=quantization_config,
+                distributed=self.distributed,
+                model_commit=self.settings.model_commit,
+                device_map=self.settings.device_map,
+                max_memory=self.settings.max_memory,
+                trust_remote_code=self.settings.model in self.trusted_models,
+            ),
         )
 
         self._apply_lora()
