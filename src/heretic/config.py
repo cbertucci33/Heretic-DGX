@@ -43,6 +43,7 @@ class RowNormalization(str, Enum):
 class ExportStrategy(str, Enum):
     MERGE = "merge"
     ADAPTER = "adapter"
+    STANDALONE = "standalone"
 
 
 class DatasetSpecification(BaseModel):
@@ -497,7 +498,7 @@ class Settings(BaseSettings):
 
     export_strategy: ExportStrategy | None = Field(
         default=None,
-        description='How to export the model: "merge", "adapter", or unset to prompt the user.',
+        description='How to export the model: "merge", "adapter", "standalone", or unset to prompt the user.',
     )
 
     checkpoint_action: str | None = Field(

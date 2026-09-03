@@ -95,6 +95,11 @@ from .config import ExportStrategy, QuantizationMethod
 from .evaluator import Evaluator
 from .model import AbliterationParameters, Model, get_model_class
 from .runtime import LocalModelRuntime, ModelRuntime
+from .standalone_export import (
+    LAGUNA_S_2_1_FP8_IDENTITY,
+    save_runtime_as_standalone,
+    verify_checkpoint_identity,
+)
 from .reproduce import (
     check_environment,
     collect_reproducibles,
@@ -114,6 +119,77 @@ from .utils import (
     print_memory_usage,
     upload_reproduce_folder,
 )
+
+
+def supports_direct_upload(strategy: ExportStrategy) -> bool:
+    return strategy is not ExportStrategy.STANDALONE
+
+
+def require_distributed_standalone_export(
+    strategy: ExportStrategy,
+    *,
+    distributed: bool,
+) -> ExportStrategy:
+    if distributed and strategy is not ExportStrategy.STANDALONE:
+        raise ValueError("distributed export requires the standalone strategy")
+    return strategy
+
+
+def require_standalone_source_directory(
+    strategy: ExportStrategy,
+    model_source: str | Path,
+) -> Path | None:
+    if strategy is not ExportStrategy.STANDALONE:
+        return None
+    source = Path(model_source).expanduser().resolve()
+    if not source.is_dir():
+        raise ValueError(
+            "standalone export requires an explicit local checkpoint directory"
+        )
+    return source
+
+
+def preflight_distributed_export(
+    settings: Settings,
+    *,
+    distributed: bool,
+) -> None:
+    if not distributed:
+        return
+    if settings.export_strategy not in (None, ExportStrategy.STANDALONE):
+        raise ValueError("distributed export requires the standalone strategy")
+    if settings.export_strategy is ExportStrategy.STANDALONE:
+        source = require_standalone_source_directory(
+            settings.export_strategy,
+            settings.model,
+        )
+        assert source is not None
+        verify_checkpoint_identity(source, LAGUNA_S_2_1_FP8_IDENTITY)
+
+
+def export_strategy_choices(
+    *,
+    distributed: bool,
+    quantization: QuantizationMethod,
+) -> tuple[Choice, ...]:
+    if distributed:
+        return (
+            Choice(
+                title="Export a standalone quantization-preserving abliterated model",
+                value=ExportStrategy.STANDALONE,
+            ),
+        )
+    return (
+        Choice(
+            title="Merge the abliteration LoRA and export the full model"
+            + ("" if quantization == QuantizationMethod.NONE else " (requires sufficient RAM)"),
+            value=ExportStrategy.MERGE,
+        ),
+        Choice(
+            title="Export the abliteration LoRA only (can be merged later)",
+            value=ExportStrategy.ADAPTER,
+        ),
+    )
 
 
 def obtain_export_strategy(
@@ -177,21 +253,10 @@ def obtain_export_strategy(
         settings.export_strategy,
         questionary.select(
             "How do you want to export the model?",
-            choices=[
-                Choice(
-                    title="Merge the abliteration LoRA and export the full model"
-                    + (
-                        ""
-                        if settings.quantization == QuantizationMethod.NONE
-                        else " (requires sufficient RAM)"
-                    ),
-                    value=ExportStrategy.MERGE,
-                ),
-                Choice(
-                    title="Export the abliteration LoRA only (can be merged later)",
-                    value=ExportStrategy.ADAPTER,
-                ),
-            ],
+            choices=export_strategy_choices(
+                distributed=model.distributed,
+                quantization=settings.quantization,
+            ),
             style=Style([("highlighted", "reverse")]),
         ),
     )
@@ -306,6 +371,7 @@ def run(
             return
         if settings.seed is None:
             raise RuntimeError("DGX coordinator did not provide a finalized seed")
+        preflight_distributed_export(settings, distributed=True)
         transformers.set_seed(settings.seed)
         worker_runner(Model(settings))
         return
@@ -457,6 +523,10 @@ def run(
     )
     if settings is None:
         raise RuntimeError("DGX coordinator did not retain finalized settings")
+    preflight_distributed_export(
+        settings,
+        distributed=settings_synchronizer is not None,
+    )
     model = Model(settings)
     runtime = runtime_factory(model)
     print()
@@ -1053,8 +1123,25 @@ def run(
                             strategy = obtain_export_strategy(settings, model)
                             if strategy is None:
                                 continue
+                            strategy = require_distributed_standalone_export(
+                                strategy,
+                                distributed=model.distributed,
+                            )
 
-                            if strategy == ExportStrategy.ADAPTER:
+                            if strategy == ExportStrategy.STANDALONE:
+                                source_directory = require_standalone_source_directory(
+                                    strategy,
+                                    settings.model,
+                                )
+                                assert source_directory is not None
+                                print("Saving standalone abliterated model...")
+                                save_runtime_as_standalone(
+                                    runtime,
+                                    source_directory=source_directory,
+                                    destination_directory=save_directory,
+                                    max_shard_size=settings.max_shard_size,
+                                )
+                            elif strategy == ExportStrategy.ADAPTER:
                                 print("Saving LoRA adapter...")
                                 runtime.save_adapter(
                                     save_directory,
@@ -1156,6 +1243,11 @@ def run(
 
                             strategy = obtain_export_strategy(settings, model)
                             if strategy is None:
+                                continue
+                            if not supports_direct_upload(strategy):
+                                print(
+                                    "[yellow]Save the standalone model locally and verify it before uploading.[/]"
+                                )
                                 continue
 
                             # Reproducibility requires that the model and all datasets
