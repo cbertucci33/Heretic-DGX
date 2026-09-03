@@ -74,12 +74,16 @@ def read_rank_environment(values: Mapping[str, str]) -> RankEnvironment:
     ):
         raise ValueError("NCCL_SOCKET_IFNAME must be a nonempty string when set")
 
+    master_address = _required(values, "MASTER_ADDR")
+    if "@" in master_address or "://" in master_address:
+        raise ValueError("MASTER_ADDR must not contain credentials or a URL scheme")
+
     return RankEnvironment(
         rank=rank,
         local_rank=local_rank,
         world_size=world_size,
         role=expected_role,
-        master_address=_required(values, "MASTER_ADDR"),
+        master_address=master_address,
         master_port=master_port,
         backend="nccl",
         timeout_seconds=timeout_seconds,

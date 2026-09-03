@@ -100,3 +100,12 @@ def test_rejects_rank_role_mismatch() -> None:
 
     with pytest.raises(ValueError, match="worker"):
         read_rank_environment(values)
+
+
+@pytest.mark.parametrize("value", ["user@example.invalid", "ssh://10.10.10.1"])
+def test_rejects_credentials_or_url_in_master_address(value: str) -> None:
+    values = _plans()[0].environment_dict()
+    values["MASTER_ADDR"] = value
+
+    with pytest.raises(ValueError, match="MASTER_ADDR"):
+        read_rank_environment(values)
