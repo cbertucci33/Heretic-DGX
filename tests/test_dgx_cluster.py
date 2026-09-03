@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 from dataclasses import replace
+import hashlib
 from pathlib import Path
 import subprocess
 import sys
@@ -30,7 +31,7 @@ from heretic.collective_probe_runner import (
 )
 from heretic.launch_plan import build_rank_launch_plans
 from heretic.launch_plan import RankLaunchPlan
-from heretic.model_loading import build_model_load_kwargs
+from heretic.model_loading import build_model_load_kwargs, matches_pinned_local_files
 from heretic.preflight_collector import collect_rank_preflights
 from heretic.rank_environment import read_rank_environment
 from heretic.rank_application import run_rank_application
@@ -135,6 +136,40 @@ rank_address = "10.10.10.2"
             checkpoint_before.digest,
             build_checkpoint_payload_identity(checkpoint_root).digest,
         )
+
+    def test_laguna_identity_includes_custom_code(self) -> None:
+        checkpoint_root = self.root / "laguna"
+        checkpoint_root.mkdir()
+        (checkpoint_root / "config.json").write_text(
+            '{"model_type":"laguna","auto_map":{'
+            '"AutoConfig":"configuration_laguna.LagunaConfig",'
+            '"AutoModelForCausalLM":"modeling_laguna.LagunaForCausalLM"}}',
+            encoding="utf-8",
+        )
+        (checkpoint_root / "model.safetensors").write_bytes(b"weights")
+        (checkpoint_root / "configuration_laguna.py").write_text(
+            "CONFIG = 1\n", encoding="utf-8"
+        )
+        modeling = checkpoint_root / "modeling_laguna.py"
+        modeling.write_text("MODEL = 1\n", encoding="utf-8")
+        before = build_checkpoint_payload_identity(checkpoint_root)
+
+        modeling.write_text("MODEL = 2\n", encoding="utf-8")
+
+        self.assertNotEqual(
+            before.digest, build_checkpoint_payload_identity(checkpoint_root).digest
+        )
+
+    def test_pinned_local_file_match_rejects_changed_code(self) -> None:
+        model_root = self.root / "model"
+        model_root.mkdir()
+        code = model_root / "modeling.py"
+        code.write_bytes(b"reviewed")
+        expected = {"modeling.py": hashlib.sha256(b"reviewed").hexdigest()}
+
+        self.assertTrue(matches_pinned_local_files(str(model_root), expected))
+        code.write_bytes(b"changed")
+        self.assertFalse(matches_pinned_local_files(str(model_root), expected))
 
     def test_rank_environment_rejects_unsafe_master_address(self) -> None:
         cluster_file = self.root / "cluster.toml"

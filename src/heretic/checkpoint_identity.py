@@ -86,11 +86,22 @@ def _validate_filename(name: object) -> str:
 
 def _checkpoint_filenames(root: Path) -> tuple[str, ...]:
     config_path = root / _CONFIG_FILENAME
-    _read_json_object(config_path)
+    config = _read_json_object(config_path)
+
+    code_files: tuple[str, ...] = ()
+    if config.get("model_type") == "laguna":
+        auto_map = config.get("auto_map")
+        expected_auto_map = {
+            "AutoConfig": "configuration_laguna.LagunaConfig",
+            "AutoModelForCausalLM": "modeling_laguna.LagunaForCausalLM",
+        }
+        if auto_map != expected_auto_map:
+            raise ValueError("Laguna checkpoint has unexpected custom-code mapping")
+        code_files = ("configuration_laguna.py", "modeling_laguna.py")
 
     index_path = root / _INDEX_FILENAME
     if not index_path.exists():
-        return (_CONFIG_FILENAME, _SINGLE_WEIGHTS_FILENAME)
+        return (_CONFIG_FILENAME, *code_files, _SINGLE_WEIGHTS_FILENAME)
 
     index = _read_json_object(index_path)
     weight_map = index.get("weight_map")
@@ -102,7 +113,7 @@ def _checkpoint_filenames(root: Path) -> tuple[str, ...]:
         if type(tensor_name) is not str or not tensor_name.strip():
             raise ValueError("checkpoint tensor name must be a nonempty string")
         weights.add(_validate_filename(filename))
-    return (_CONFIG_FILENAME, _INDEX_FILENAME, *sorted(weights))
+    return (_CONFIG_FILENAME, _INDEX_FILENAME, *code_files, *sorted(weights))
 
 
 def _hash_regular_file(path: Path) -> CheckpointFileIdentity:

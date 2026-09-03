@@ -34,7 +34,7 @@ from transformers.generation import (
 )
 
 from .config import QuantizationMethod, RowNormalization, Settings
-from .model_loading import build_model_load_kwargs
+from .model_loading import build_model_load_kwargs, is_pinned_laguna_checkpoint
 from .system import empty_cache
 from .tp_capabilities import directional_lora_factors, inspect_lora_target_topologies
 from .utils import Prompt, batchify, format_exception, print
@@ -110,10 +110,12 @@ class Model:
         #           after the prompt and thinks the sequence is complete.
         self.tokenizer.padding_side = "left"
 
+        self.trusted_models = set()
+        if is_pinned_laguna_checkpoint(settings.model):
+            self.trusted_models.add(settings.model)
+
         self.model = None  # ty:ignore[invalid-assignment]
         self.distributed = os.environ.get("HERETIC_DGX_ACTIVE") == "1"
-
-        self.trusted_models = set()
 
         for dtype in settings.dtypes:
             print(f"* Trying dtype [bold]{dtype}[/]...")
