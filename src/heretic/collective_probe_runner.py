@@ -23,6 +23,10 @@ def _run_probe_plan(
     if socket_ifname := environment.get("NCCL_SOCKET_IFNAME"):
         environment["GLOO_SOCKET_IFNAME"] = socket_ifname
     rank_argv = (
+        "timeout",
+        "--foreground",
+        "--kill-after=5s",
+        f"{timeout_seconds}s",
         "env",
         *(f"{name}={value}" for name, value in sorted(environment.items())),
         plan.argv[0],
@@ -47,11 +51,13 @@ def _run_probe_plan(
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
-            timeout=timeout_seconds,
+            timeout=timeout_seconds + 10,
             check=False,
         )
     except subprocess.TimeoutExpired as error:
-        raise RuntimeError(f"rank {plan.rank} collective probe timed out") from error
+        raise RuntimeError(
+            f"rank {plan.rank} collective probe exceeded its cleanup deadline"
+        ) from error
     if completed.returncode != 0:
         detail = completed.stderr.strip()[-2000:]
         raise RuntimeError(

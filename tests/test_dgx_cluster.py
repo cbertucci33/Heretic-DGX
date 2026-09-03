@@ -209,7 +209,8 @@ rank_address = "10.10.10.2"
             _run_probe_plan(plans[0], timeout_seconds=30)
 
         command = run.call_args.args[0]
-        self.assertEqual(command[0], "env")
+        self.assertEqual(command[0], "timeout")
+        self.assertIn("30s", command)
         self.assertIn("CUDA_VISIBLE_DEVICES=", command)
         self.assertIn("GLOO_SOCKET_IFNAME=fabric0", command)
 
