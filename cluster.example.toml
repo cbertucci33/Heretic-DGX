@@ -1,0 +1,16 @@
+# Exactly two DGX Spark nodes are supported. Use management names for SSH and
+# fabric addresses for rank traffic. The fabric must not be the default route.
+python = "/home/cb/src/heretic-dgx-rebuild/.venv/bin/python"
+workdir = "/home/cb/src/heretic-dgx-rebuild"
+backend = "nccl"
+master_port = 29500
+timeout_seconds = 900
+nccl_socket_ifname = "<fabric-interface>"
+
+[[nodes]]
+host = "gx10-01"
+rank_address = "<coordinator-fabric-address>"
+
+[[nodes]]
+host = "gx10-02"
+rank_address = "<worker-fabric-address>"

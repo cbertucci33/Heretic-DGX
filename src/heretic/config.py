@@ -157,6 +157,12 @@ class BenchmarkSpecification(BaseModel):
 class Settings(BaseSettings):
     model: str = Field(description="Hugging Face model ID, or path to model on disk.")
 
+    cluster: str | None = Field(
+        default=None,
+        description="Path to an exactly-two-node DGX Spark cluster TOML file.",
+        exclude=True,
+    )
+
     model_commit: str | None = Field(
         default=None,
         description="Hugging Face commit hash of the model.",
