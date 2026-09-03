@@ -3,11 +3,17 @@
 from dataclasses import replace
 from pathlib import Path
 import subprocess
+import sys
+import time
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
 from heretic.checkpoint_identity import build_checkpoint_payload_identity
+from heretic.application_runner import (
+    preflight_and_collect_rank_applications,
+    run_rank_application_plan,
+)
 from heretic.cluster import load_cluster_config
 from heretic.collective_probe import CollectiveProbeResult
 from heretic.collective_probe_runner import (
@@ -15,6 +21,7 @@ from heretic.collective_probe_runner import (
     preflight_and_collect_rank_collective_probes,
 )
 from heretic.launch_plan import build_rank_launch_plans
+from heretic.launch_plan import RankLaunchPlan
 from heretic.preflight_collector import collect_rank_preflights
 from heretic.rank_environment import read_rank_environment
 from heretic.rank_preflight import (
@@ -204,7 +211,7 @@ rank_address = "10.10.10.2"
         )
 
         with patch(
-            "heretic.collective_probe_runner.subprocess.run", return_value=completed
+            "heretic.application_runner.subprocess.run", return_value=completed
         ) as run:
             _run_probe_plan(plans[0], timeout_seconds=30)
 
@@ -221,7 +228,7 @@ rank_address = "10.10.10.2"
             "",
         )
         with patch(
-            "heretic.collective_probe_runner.subprocess.run", return_value=completed
+            "heretic.application_runner.subprocess.run", return_value=completed
         ) as run:
             _run_probe_plan(plans[1], timeout_seconds=30)
 
@@ -273,3 +280,76 @@ rank_address = "10.10.10.2"
                     timeout_seconds=30,
                 )
         run_probe.assert_not_called()
+
+    def test_rank_application_captures_successful_fake_rank(self) -> None:
+        plan = RankLaunchPlan(
+            rank=0,
+            role="coordinator",
+            host="local",
+            argv=(sys.executable, "-c", "print('rank-zero-ok')"),
+            workdir=str(self.root),
+            environment=(),
+        )
+
+        result = run_rank_application_plan(plan, timeout_seconds=5)
+
+        self.assertEqual(result.rank, 0)
+        self.assertEqual(result.stdout, "rank-zero-ok\n")
+
+    def test_rank_application_propagates_nonzero_exit(self) -> None:
+        plan = RankLaunchPlan(
+            rank=0,
+            role="coordinator",
+            host="local",
+            argv=(sys.executable, "-c", "raise SystemExit(7)"),
+            workdir=str(self.root),
+            environment=(),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "exit code 7"):
+            run_rank_application_plan(plan, timeout_seconds=5)
+
+    def test_rank_applications_do_not_start_when_preflight_fails(self) -> None:
+        plans = (
+            RankLaunchPlan(0, "coordinator", "a", ("/python",), "/work", ()),
+            RankLaunchPlan(1, "worker", "b", ("/python",), "/work", ()),
+        )
+
+        with patch(
+            "heretic.application_runner.collect_rank_preflights",
+            side_effect=RuntimeError("identity mismatch"),
+        ), patch("heretic.application_runner.collect_rank_applications") as collect:
+            with self.assertRaisesRegex(RuntimeError, "identity mismatch"):
+                preflight_and_collect_rank_applications(
+                    plans,
+                    "/checkpoint",
+                    timeout_seconds=5,
+                )
+
+        collect.assert_not_called()
+
+    def test_rank_application_timeout_leaves_no_child_process(self) -> None:
+        child_pid_file = self.root / "child.pid"
+        script = (
+            "import pathlib, subprocess, time; "
+            "child=subprocess.Popen(['sleep', '60']); "
+            f"pathlib.Path({str(child_pid_file)!r}).write_text(str(child.pid)); "
+            "time.sleep(60)"
+        )
+        plan = RankLaunchPlan(
+            rank=0,
+            role="coordinator",
+            host="local",
+            argv=(sys.executable, "-c", script),
+            workdir=str(self.root),
+            environment=(),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "exit code 124"):
+            run_rank_application_plan(plan, timeout_seconds=1)
+
+        child_pid = int(child_pid_file.read_text(encoding="utf-8"))
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline and Path(f"/proc/{child_pid}").exists():
+            time.sleep(0.05)
+        self.assertFalse(Path(f"/proc/{child_pid}").exists())

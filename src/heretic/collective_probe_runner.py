@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import shlex
-import subprocess
+from dataclasses import replace
 
+from .application_runner import run_rank_application_plan
 from .collective_probe import (
     CollectiveProbeResult,
     parse_collective_probe_result,
@@ -22,48 +22,19 @@ def _run_probe_plan(
     environment["CUDA_VISIBLE_DEVICES"] = ""
     if socket_ifname := environment.get("NCCL_SOCKET_IFNAME"):
         environment["GLOO_SOCKET_IFNAME"] = socket_ifname
-    rank_argv = (
-        "timeout",
-        "--foreground",
-        "--kill-after=5s",
-        f"{timeout_seconds}s",
-        "env",
-        *(f"{name}={value}" for name, value in sorted(environment.items())),
-        plan.argv[0],
-        "-m",
-        "heretic.collective_probe",
+    probe_plan = replace(
+        plan,
+        argv=(
+            plan.argv[0],
+            "-m",
+            "heretic.collective_probe",
+        ),
+        environment=tuple(sorted(environment.items())),
     )
-    command = rank_argv
-    if plan.rank == 1:
-        command = (
-            "ssh",
-            "-o",
-            "BatchMode=yes",
-            "-o",
-            "ConnectTimeout=10",
-            "--",
-            plan.host,
-            shlex.join(rank_argv),
-        )
-    try:
-        completed = subprocess.run(
-            command,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds + 10,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as error:
-        raise RuntimeError(
-            f"rank {plan.rank} collective probe exceeded its cleanup deadline"
-        ) from error
-    if completed.returncode != 0:
-        detail = completed.stderr.strip()[-2000:]
-        raise RuntimeError(
-            f"rank {plan.rank} collective probe failed with exit code "
-            f"{completed.returncode}: {detail}"
-        )
+    completed = run_rank_application_plan(
+        probe_plan,
+        timeout_seconds=timeout_seconds,
+    )
     result = parse_collective_probe_result(completed.stdout.strip())
     if result.rank != plan.rank:
         raise RuntimeError(
