@@ -4,6 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 import subprocess
 import sys
+from threading import Event, Thread
 import time
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -11,6 +12,7 @@ from unittest.mock import patch
 
 from heretic.checkpoint_identity import build_checkpoint_payload_identity
 from heretic.application_runner import (
+    collect_rank_applications,
     preflight_and_collect_rank_applications,
     run_rank_application_plan,
 )
@@ -355,6 +357,75 @@ rank_address = "10.10.10.2"
 
         with self.assertRaisesRegex(RuntimeError, "exit code 124"):
             run_rank_application_plan(plan, timeout_seconds=1)
+
+        child_pid = int(child_pid_file.read_text(encoding="utf-8"))
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline and Path(f"/proc/{child_pid}").exists():
+            time.sleep(0.05)
+        self.assertFalse(Path(f"/proc/{child_pid}").exists())
+
+    def test_rank_failure_cancels_peer_without_waiting_for_timeout(self) -> None:
+        plans = (
+            RankLaunchPlan(0, "coordinator", "a", ("/python",), "/work", ()),
+            RankLaunchPlan(1, "worker", "b", ("/python",), "/work", ()),
+        )
+        worker_started = Event()
+        worker_cancelled = Event()
+
+        def run(plan, *, timeout_seconds, cancellation):
+            self.assertEqual(timeout_seconds, 60)
+            if plan.rank == 0:
+                self.assertTrue(worker_started.wait(timeout=1))
+                raise RuntimeError("rank 0 failed early")
+            worker_started.set()
+            self.assertTrue(cancellation.wait(timeout=1))
+            worker_cancelled.set()
+            raise RuntimeError("rank 1 application cancelled because its peer failed")
+
+        started = time.monotonic()
+        with patch(
+            "heretic.application_runner.run_rank_application_plan",
+            side_effect=run,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "rank 0 failed early"):
+                collect_rank_applications(plans, timeout_seconds=60)
+
+        self.assertTrue(worker_cancelled.is_set())
+        self.assertLess(time.monotonic() - started, 2)
+
+    def test_rank_cancellation_leaves_no_local_child_process(self) -> None:
+        child_pid_file = self.root / "cancelled-child.pid"
+        script = (
+            "import pathlib, subprocess, time; "
+            "child=subprocess.Popen(['sleep', '60']); "
+            f"pathlib.Path({str(child_pid_file)!r}).write_text(str(child.pid)); "
+            "time.sleep(60)"
+        )
+        plan = RankLaunchPlan(
+            rank=0,
+            role="coordinator",
+            host="local",
+            argv=(sys.executable, "-c", script),
+            workdir=str(self.root),
+            environment=(),
+        )
+        cancellation = Event()
+
+        def cancel_when_started():
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline and not child_pid_file.exists():
+                time.sleep(0.01)
+            cancellation.set()
+
+        canceller = Thread(target=cancel_when_started)
+        canceller.start()
+        with self.assertRaisesRegex(RuntimeError, "peer failed"):
+            run_rank_application_plan(
+                plan,
+                timeout_seconds=60,
+                cancellation=cancellation,
+            )
+        canceller.join()
 
         child_pid = int(child_pid_file.read_text(encoding="utf-8"))
         deadline = time.monotonic() + 2

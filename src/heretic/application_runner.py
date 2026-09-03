@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+import os
 import shlex
+import signal
 import subprocess
+from threading import Event
+import time
 
 from .launch_plan import RankLaunchPlan
 from .preflight_collector import collect_rank_preflights
@@ -22,7 +26,10 @@ class RankApplicationResult:
 
 
 def run_rank_application_plan(
-    plan: RankLaunchPlan, *, timeout_seconds: int
+    plan: RankLaunchPlan,
+    *,
+    timeout_seconds: int,
+    cancellation: Event | None = None,
 ) -> RankApplicationResult:
     """Run one rank through a bounded local or noninteractive SSH command."""
 
@@ -55,31 +62,97 @@ def run_rank_application_plan(
         )
         workdir = None
 
-    try:
-        completed = subprocess.run(
-            command,
-            cwd=workdir,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds + 10,
-            check=False,
+    if cancellation is None:
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=workdir,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds + 10,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError(
+                f"rank {plan.rank} application exceeded its cleanup deadline"
+            ) from error
+        if completed.returncode != 0:
+            detail = (completed.stderr.strip() or completed.stdout.strip())[-2000:]
+            raise RuntimeError(
+                f"rank {plan.rank} application failed with exit code "
+                f"{completed.returncode}: {detail}"
+            )
+        return RankApplicationResult(
+            rank=plan.rank,
+            stdout=completed.stdout,
+            stderr=completed.stderr,
         )
-    except subprocess.TimeoutExpired as error:
-        raise RuntimeError(
-            f"rank {plan.rank} application exceeded its cleanup deadline"
-        ) from error
-    if completed.returncode != 0:
-        detail = (completed.stderr.strip() or completed.stdout.strip())[-2000:]
+
+    if cancellation.is_set():
+        raise RuntimeError(f"rank {plan.rank} application cancelled before launch")
+
+    process = subprocess.Popen(
+        command,
+        cwd=workdir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    deadline = time.monotonic() + timeout_seconds + 10
+    stdout = ""
+    stderr = ""
+    while True:
+        if cancellation.is_set():
+            _terminate_process_group(process)
+            stdout, stderr = process.communicate()
+            raise RuntimeError(
+                f"rank {plan.rank} application cancelled because its peer failed"
+            )
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            _terminate_process_group(process)
+            process.communicate()
+            raise RuntimeError(
+                f"rank {plan.rank} application exceeded its cleanup deadline"
+            )
+        try:
+            stdout, stderr = process.communicate(timeout=min(0.1, remaining))
+            break
+        except subprocess.TimeoutExpired:
+            continue
+
+    if process.returncode != 0:
+        detail = (stderr.strip() or stdout.strip())[-2000:]
         raise RuntimeError(
             f"rank {plan.rank} application failed with exit code "
-            f"{completed.returncode}: {detail}"
+            f"{process.returncode}: {detail}"
         )
     return RankApplicationResult(
         rank=plan.rank,
-        stdout=completed.stdout,
-        stderr=completed.stderr,
+        stdout=stdout,
+        stderr=stderr,
     )
+
+
+def _terminate_process_group(process: subprocess.Popen[str]) -> None:
+    """Stop a rank wrapper and its local descendants within five seconds."""
+
+    if process.poll() is not None:
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+        process.wait(timeout=5)
+    except ProcessLookupError:
+        return
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
 
 
 def collect_rank_applications(
@@ -95,18 +168,29 @@ def collect_rank_applications(
         raise ValueError("rank application timeout must be a positive integer")
 
     results: dict[int, RankApplicationResult] = {}
+    cancellation = Event()
+    first_error: BaseException | None = None
     with ThreadPoolExecutor(max_workers=2) as executor:
         futures = {
             executor.submit(
                 run_rank_application_plan,
                 plan,
                 timeout_seconds=timeout_seconds,
+                cancellation=cancellation,
             ): plan.rank
             for plan in plans
         }
         for future in as_completed(futures):
-            result = future.result()
-            results[result.rank] = result
+            try:
+                result = future.result()
+            except BaseException as error:
+                if first_error is None:
+                    first_error = error
+                    cancellation.set()
+            else:
+                results[result.rank] = result
+    if first_error is not None:
+        raise first_error
     return results[0], results[1]
 
 
