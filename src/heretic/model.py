@@ -443,6 +443,19 @@ class Model:
             for expert in layer.moe.experts:  # ty:ignore[possibly-missing-attribute, not-iterable]
                 try_add("mlp.down_proj", expert.output_linear)  # ty:ignore[possibly-missing-attribute]
 
+        if self.settings.abliteration_components is not None:
+            allowed = set(self.settings.abliteration_components)
+            unknown = allowed - {"attn.o_proj", "mlp.down_proj"}
+            if unknown:
+                raise ValueError(
+                    f"unknown abliteration components: {sorted(unknown)}"
+                )
+            modules = {
+                component: component_modules
+                for component, component_modules in modules.items()
+                if component in allowed
+            }
+
         # We need at least one module across all components for abliteration to work.
         total_modules = sum(len(mods) for mods in modules.values())
         assert total_modules > 0, "No abliterable modules found in layer"

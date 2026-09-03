@@ -95,6 +95,11 @@ scorers = [
     { plugin = "heretic.scorers.kl_divergence.KLDivergence", optimization = "minimize"},
 ]
 
+# Optional allowlist of model components to abliterate. Leave unset to use all
+# components supported by the model. Laguna FP8 standalone export requires only
+# the protected BF16 attention output projections:
+# abliteration_components = ["attn.o_proj"]
+
 # Whether to adjust the residual directions so that only the component that is
 # orthogonal to the good direction is subtracted during abliteration.
 orthogonalize_direction = true

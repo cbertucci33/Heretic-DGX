@@ -366,6 +366,14 @@ class Settings(BaseSettings):
         ),
     )
 
+    abliteration_components: list[str] | None = Field(
+        default=None,
+        description=(
+            "Optional allowlist of model components to abliterate. "
+            'Known components are "attn.o_proj" and "mlp.down_proj".'
+        ),
+    )
+
     orthogonalize_direction: bool = Field(
         default=True,
         description=(

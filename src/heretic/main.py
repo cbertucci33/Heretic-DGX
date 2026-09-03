@@ -159,6 +159,11 @@ def preflight_distributed_export(
     if settings.export_strategy not in (None, ExportStrategy.STANDALONE):
         raise ValueError("distributed export requires the standalone strategy")
     if settings.export_strategy is ExportStrategy.STANDALONE:
+        if settings.abliteration_components != ["attn.o_proj"]:
+            raise ValueError(
+                "Laguna FP8 standalone export requires "
+                'abliteration_components = ["attn.o_proj"]'
+            )
         source = require_standalone_source_directory(
             settings.export_strategy,
             settings.model,

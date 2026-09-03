@@ -391,7 +391,26 @@ def test_distributed_export_preflight_rejects_lossy_strategy() -> None:
     settings = SimpleNamespace(
         export_strategy=ExportStrategy.MERGE,
         model="unused",
+        abliteration_components=None,
     )
     with pytest.raises(ValueError, match="standalone"):
         preflight_distributed_export(settings, distributed=True)
     preflight_distributed_export(settings, distributed=False)
+
+
+def test_component_allowlist_keeps_only_laguna_fp8_targets() -> None:
+    from types import MethodType, SimpleNamespace
+
+    from heretic.model import Model
+
+    attention = torch.nn.Linear(5, 3, bias=False, dtype=torch.bfloat16)
+    mlp = torch.nn.Linear(5, 3, bias=False, dtype=torch.bfloat16)
+    layer = SimpleNamespace(
+        self_attn=SimpleNamespace(o_proj=attention),
+        mlp=SimpleNamespace(down_proj=mlp),
+    )
+    model = object.__new__(Model)
+    model.settings = SimpleNamespace(abliteration_components=["attn.o_proj"])
+    model.get_layers = MethodType(lambda _self: [layer], model)
+
+    assert model.get_layer_modules(0) == {"attn.o_proj": [attention]}
