@@ -3,6 +3,7 @@
 
 import math
 import os
+import traceback
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any, Type, cast
@@ -156,7 +157,11 @@ class Model:
                 self.model = None  # ty:ignore[invalid-assignment]
                 empty_cache()
 
-                formatted = format_exception(error)
+                formatted = (
+                    traceback.format_exc().strip()
+                    if settings.print_debug_information
+                    else format_exception(error)
+                )
                 if "\n" in formatted:
                     print(f"* [red]Failed:\n{formatted}[/]")
                 else:
