@@ -123,13 +123,15 @@ uv run ruff format --check .
 Model-family and quantization support must be proven independently with a full
 load, optimization, standalone export, clean reload, and generation test.
 
-## Safety and limitations
+## Safety and liability
 
 Heretic changes model refusal behavior. It does not guarantee correctness,
 capability retention, safety, legality, or suitability for a particular use.
 KL divergence and automated checks are limited indicators, not substitutes for
 broad evaluation. Review the source model's license and usage restrictions
 before creating or distributing a derivative.
+
+**User responsibility:** this software is provided without warranty. The creators, uploaders, and maintainers are not responsible or liable for what others generate, publish, deploy, or otherwise do with any abliterated models made by this. Users must operate it responsibly, apply appropriate safeguards, comply with applicable law, and respect third-party rights. This software is for research purposes only and is not intended for production use.
 
 ## Attribution and license
 
