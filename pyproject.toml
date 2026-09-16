@@ -1,6 +1,6 @@
 [project]
 name = "heretic-llm"
-version = "0.1.0"
+version = "0.1.1"
 description = "Two-node DGX Spark implementation of Heretic"
 readme = "README.md"
 license = "AGPL-3.0-or-later"

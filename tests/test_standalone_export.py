@@ -343,34 +343,7 @@ def test_standalone_upload_cannot_fall_through_to_full_merge() -> None:
     assert not supports_direct_upload(ExportStrategy.STANDALONE)
 
 
-def test_distributed_export_requires_standalone_but_local_choices_are_preserved() -> (
-    None
-):
-    from heretic.config import ExportStrategy
-    from heretic.main import require_distributed_standalone_export
-
-    assert (
-        require_distributed_standalone_export(
-            ExportStrategy.STANDALONE,
-            distributed=True,
-        )
-        is ExportStrategy.STANDALONE
-    )
-    assert (
-        require_distributed_standalone_export(
-            ExportStrategy.ADAPTER,
-            distributed=False,
-        )
-        is ExportStrategy.ADAPTER
-    )
-    with pytest.raises(ValueError, match="standalone"):
-        require_distributed_standalone_export(
-            ExportStrategy.MERGE,
-            distributed=True,
-        )
-
-
-def test_distributed_export_menu_only_offers_standalone() -> None:
+def test_distributed_export_menu_preserves_upstream_choices() -> None:
     from heretic.config import ExportStrategy, QuantizationMethod
     from heretic.main import export_strategy_choices
 
@@ -383,14 +356,18 @@ def test_distributed_export_menu_only_offers_standalone() -> None:
         quantization=QuantizationMethod.NONE,
     )
 
-    assert [choice.value for choice in distributed] == [ExportStrategy.STANDALONE]
+    assert [choice.value for choice in distributed] == [
+        ExportStrategy.MERGE,
+        ExportStrategy.ADAPTER,
+        ExportStrategy.STANDALONE,
+    ]
     assert [choice.value for choice in local] == [
         ExportStrategy.MERGE,
         ExportStrategy.ADAPTER,
     ]
 
 
-def test_distributed_export_preflight_rejects_lossy_strategy() -> None:
+def test_distributed_export_preflight_accepts_upstream_strategies() -> None:
     from types import SimpleNamespace
 
     from heretic.config import ExportStrategy
@@ -401,9 +378,11 @@ def test_distributed_export_preflight_rejects_lossy_strategy() -> None:
         model="unused",
         abliteration_components=None,
     )
-    with pytest.raises(ValueError, match="standalone"):
-        preflight_distributed_export(settings, distributed=True)
+    preflight_distributed_export(settings, distributed=True)
     preflight_distributed_export(settings, distributed=False)
+
+    settings.export_strategy = ExportStrategy.ADAPTER
+    preflight_distributed_export(settings, distributed=True)
 
 
 def test_component_allowlist_keeps_only_laguna_fp8_targets() -> None:

@@ -3,7 +3,7 @@
 Heretic DGX is a two-node NVIDIA DGX Spark implementation of
 [`p-e-w/heretic`](https://github.com/p-e-w/heretic). It runs Heretic's
 directional-ablation optimization across exactly two DGX Spark systems and
-exports a standalone checkpoint.
+retains upstream Heretic's adapter and merged-model export workflows.
 
 ## Relationship to the original Heretic project
 
@@ -21,8 +21,12 @@ across two DGX Spark systems:
 - source, checkpoint, topology, and collective preflight checks;
 - mirrored prompt, residual, scoring, and optimization operations;
 - coordinated cancellation, failure reporting, and teardown; and
-- standalone export that verifies target changes while preserving quantized
-  and non-target artifacts.
+- coordinated PEFT adapter and merged Transformers checkpoint export.
+
+The Laguna FP8 path adds a model-specific standalone exporter. It verifies
+target changes while preserving the source checkpoint's quantized and
+non-target artifacts. This path does not replace the general upstream export
+workflows.
 
 For the original single-system project, documentation, and community, use the
 [upstream Heretic repository](https://github.com/p-e-w/heretic). Issues specific
@@ -36,10 +40,14 @@ to the two-DGX implementation belong in this repository.
   identity, topology, and collective communication before optimization.
 - Prompt ingestion, residual calculation, scoring, optimization, winner
   restoration, and model materialization are coordinated across both ranks.
+- Distributed runs offer the same PEFT adapter and merged-model artifacts as
+  upstream Heretic. Direct Hub uploads stage the coordinated artifact before
+  upload so both ranks participate in tensor gathering.
 - Failure, cancellation, timeout, and teardown behavior is bounded so a failed
   peer does not leave the other rank running indefinitely.
-- The standalone exporter preserves non-target files and quantized tensors and
-  verifies intended tensor changes before reporting success.
+- The optional Laguna standalone exporter preserves non-target files and
+  quantized tensors and verifies intended tensor changes before reporting
+  success.
 
 This release is intentionally narrow: **Linux, exactly two DGX Spark nodes,
 NCCL, and one rank per node**. It is not a general multi-node backend.
@@ -75,7 +83,7 @@ Run on both nodes at the same absolute path:
 ```sh
 git clone https://github.com/cbertucci33/Heretic-DGX.git
 cd Heretic-DGX
-git checkout v0.1.0
+git checkout v0.1.1
 uv sync --frozen
 ```
 
@@ -121,7 +129,24 @@ uv run ruff format --check .
 ```
 
 Model-family and quantization support must be proven independently with a full
-load, optimization, standalone export, clean reload, and generation test.
+load, optimization, selected export type, clean reload, and generation test.
+
+## Export behavior
+
+Heretic DGX supports the two artifact types offered by upstream Heretic:
+
+- `adapter`: a PEFT LoRA adapter that can be merged later;
+- `merge`: a full merged Transformers checkpoint, including tokenizer and
+  multimodal processor files when present.
+
+Both paths coordinate all tensor-parallel ranks before rank 0 writes the
+artifact. Their checkpoint behavior follows the pinned upstream Heretic and
+Transformers versions. In particular, upstream's 4-bit load mode exports a
+full-precision merged model after reloading the base checkpoint on CPU.
+
+The third strategy, `standalone`, is specific to the validated Laguna FP8
+checkpoint. It preserves Laguna's native quantized tensors and patches only
+the protected BF16 targets. Do not select it for another model family.
 
 ## Safety and liability
 

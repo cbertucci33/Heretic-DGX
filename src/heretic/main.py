@@ -60,6 +60,7 @@ patch_tqdm()
 import logging
 import math
 import random
+import tempfile
 import time
 import warnings
 from collections.abc import Callable
@@ -125,14 +126,26 @@ def supports_direct_upload(strategy: ExportStrategy) -> bool:
     return strategy is not ExportStrategy.STANDALONE
 
 
-def require_distributed_standalone_export(
+def save_upstream_export(
+    runtime: ModelRuntime,
+    model: Model,
     strategy: ExportStrategy,
+    directory: str | Path,
     *,
-    distributed: bool,
-) -> ExportStrategy:
-    if distributed and strategy is not ExportStrategy.STANDALONE:
-        raise ValueError("distributed export requires the standalone strategy")
-    return strategy
+    max_shard_size: int | str,
+) -> None:
+    """Save the same adapter or merged artifact offered by upstream Heretic."""
+
+    if strategy is ExportStrategy.ADAPTER:
+        runtime.save_adapter(str(directory), max_shard_size=max_shard_size)
+        return
+    if strategy is not ExportStrategy.MERGE:
+        raise ValueError("upstream export requires the adapter or merge strategy")
+
+    runtime.save_merged(str(directory), max_shard_size=max_shard_size)
+    model.tokenizer.save_pretrained(directory)
+    if model.processor is not None:
+        model.processor.save_pretrained(directory)
 
 
 def require_standalone_source_directory(
@@ -156,8 +169,6 @@ def preflight_distributed_export(
 ) -> None:
     if not distributed:
         return
-    if settings.export_strategy not in (None, ExportStrategy.STANDALONE):
-        raise ValueError("distributed export requires the standalone strategy")
     if settings.export_strategy is ExportStrategy.STANDALONE:
         if settings.abliteration_components != ["attn.o_proj"]:
             raise ValueError(
@@ -177,14 +188,7 @@ def export_strategy_choices(
     distributed: bool,
     quantization: QuantizationMethod,
 ) -> tuple[Choice, ...]:
-    if distributed:
-        return (
-            Choice(
-                title="Export a standalone quantization-preserving abliterated model",
-                value=ExportStrategy.STANDALONE,
-            ),
-        )
-    return (
+    choices = [
         Choice(
             title="Merge the abliteration LoRA and export the full model"
             + (
@@ -198,7 +202,18 @@ def export_strategy_choices(
             title="Export the abliteration LoRA only (can be merged later)",
             value=ExportStrategy.ADAPTER,
         ),
-    )
+    ]
+    if distributed:
+        choices.append(
+            Choice(
+                title=(
+                    "Export a standalone Laguna FP8 checkpoint "
+                    "(preserves native quantization)"
+                ),
+                value=ExportStrategy.STANDALONE,
+            )
+        )
+    return tuple(choices)
 
 
 def obtain_export_strategy(
@@ -1132,11 +1147,6 @@ def run(
                             strategy = obtain_export_strategy(settings, model)
                             if strategy is None:
                                 continue
-                            strategy = require_distributed_standalone_export(
-                                strategy,
-                                distributed=model.distributed,
-                            )
-
                             if strategy == ExportStrategy.STANDALONE:
                                 source_directory = require_standalone_source_directory(
                                     strategy,
@@ -1152,19 +1162,22 @@ def run(
                                 )
                             elif strategy == ExportStrategy.ADAPTER:
                                 print("Saving LoRA adapter...")
-                                runtime.save_adapter(
+                                save_upstream_export(
+                                    runtime,
+                                    model,
+                                    strategy,
                                     save_directory,
                                     max_shard_size=settings.max_shard_size,
                                 )
                             else:
                                 print("Saving merged model...")
-                                runtime.save_merged(
+                                save_upstream_export(
+                                    runtime,
+                                    model,
+                                    strategy,
                                     save_directory,
                                     max_shard_size=settings.max_shard_size,
                                 )
-                                model.tokenizer.save_pretrained(save_directory)
-                                if model.processor is not None:
-                                    model.processor.save_pretrained(save_directory)
                                 reset_trial_model()
 
                             print(f"Model saved to [bold]{save_directory}[/].")
@@ -1320,7 +1333,43 @@ def run(
                             else:
                                 reproducibility_information = "none"
 
-                            if strategy == ExportStrategy.ADAPTER:
+                            if model.distributed:
+                                source_path = Path(settings.model).expanduser()
+                                staging_parent = (
+                                    source_path.resolve().parent
+                                    if source_path.is_dir()
+                                    else Path.cwd()
+                                )
+                                with tempfile.TemporaryDirectory(
+                                    prefix=".heretic-upload-",
+                                    dir=staging_parent,
+                                ) as staging_directory:
+                                    print("Staging distributed export for upload...")
+                                    save_upstream_export(
+                                        runtime,
+                                        model,
+                                        strategy,
+                                        staging_directory,
+                                        max_shard_size=settings.max_shard_size,
+                                    )
+                                    api = HfApi()
+                                    api.create_repo(
+                                        repo_id=repo_id,
+                                        repo_type="model",
+                                        private=private,
+                                        exist_ok=True,
+                                        token=token,
+                                    )
+                                    api.upload_folder(
+                                        repo_id=repo_id,
+                                        repo_type="model",
+                                        folder_path=staging_directory,
+                                        token=token,
+                                        commit_message="Upload Heretic model",
+                                    )
+                                if strategy is ExportStrategy.MERGE:
+                                    reset_trial_model()
+                            elif strategy == ExportStrategy.ADAPTER:
                                 print("Uploading LoRA adapter...")
                                 model.model.push_to_hub(
                                     repo_id,
