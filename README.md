@@ -32,7 +32,24 @@ For the original single-system project, documentation, and community, use the
 [upstream Heretic repository](https://github.com/p-e-w/heretic). Issues specific
 to the two-DGX implementation belong in this repository.
 
-## Release 0.1 scope
+## Releases
+
+### 0.1.1
+
+Release 0.1.1 fixes distributed export behavior. Release 0.1.0 incorrectly
+limited distributed runs to the Laguna-specific `standalone` strategy. The
+fix restores both upstream export choices:
+
+- `adapter` writes the PEFT LoRA adapter;
+- `merge` writes the full merged Transformers checkpoint, tokenizer, and
+  multimodal processor files when present.
+
+Direct Hub uploads now stage the selected distributed artifact before upload,
+which lets both tensor-parallel ranks participate in tensor gathering. The
+Laguna `standalone` exporter remains available as a separate, model-specific
+option. Regression tests cover `adapter`, `merge`, and `standalone` selection.
+
+### 0.1.0
 
 - One coordinator command launches one GPU-backed rank on each of two nodes.
 - Both ranks load the model through Transformers tensor parallelism.
@@ -49,12 +66,12 @@ to the two-DGX implementation belong in this repository.
   quantized tensors and verifies intended tensor changes before reporting
   success.
 
-This release is intentionally narrow: **Linux, exactly two DGX Spark nodes,
-NCCL, and one rank per node**. It is not a general multi-node backend.
+This release supports **Linux, exactly two DGX Spark nodes, NCCL, and one rank
+per node**. It is not a general multi-node backend.
 
 ## Validated model
 
-Release 0.1 was proven end to end with
+Release 0.1.0 was proven end to end with
 [`poolside/Laguna-S-2.1-FP8`](https://huggingface.co/poolside/Laguna-S-2.1-FP8).
 The resulting standalone checkpoint is available as
 [`cbert33/Laguna-S-2.1-Heretic-FP8`](https://huggingface.co/cbert33/Laguna-S-2.1-Heretic-FP8).
@@ -128,8 +145,8 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-Model-family and quantization support must be proven independently with a full
-load, optimization, selected export type, clean reload, and generation test.
+Before using another model family or quantization, verify a full load,
+optimization, selected export type, clean reload, and generation test.
 
 ## Export behavior
 
@@ -156,7 +173,12 @@ KL divergence and automated checks are limited indicators, not substitutes for
 broad evaluation. Review the source model's license and usage restrictions
 before creating or distributing a derivative.
 
-**User responsibility:** this software is provided without warranty. The creators, uploaders, and maintainers are not responsible or liable for what others generate, publish, deploy, or otherwise do with any abliterated models made by this. Users must operate it responsibly, apply appropriate safeguards, comply with applicable law, and respect third-party rights. This software is for research purposes only and is not intended for production use.
+**User responsibility:** this software is provided without warranty. The
+creators, uploaders, and maintainers are not responsible or liable for what
+others generate, publish, deploy, or otherwise do with any abliterated models
+made by this. Users must operate it responsibly, apply appropriate safeguards,
+comply with applicable law, and respect third-party rights. This software is
+for research purposes only and is not intended for production use.
 
 ## Attribution and license
 
