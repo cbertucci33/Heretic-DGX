@@ -20,6 +20,30 @@ as possible. Using Heretic does not require an understanding of transformer
 internals. In fact, anyone who knows how to run a command-line program
 can use Heretic to decensor language models.
 
+## Heretic-DGX Release 2
+
+Release 2 promotes the two-node DGX Spark implementation to the active
+Heretic-DGX line. It is based on upstream Heretic `bedb94e` and preserves the
+project's ordinary single-node behavior.
+
+This release adds:
+
+- one coordinator command for exactly two GPU-backed DGX Spark ranks, with
+  bounded preflight, launch, peer-failure cancellation, and cleanup;
+- source-tree and checkpoint-identity checks before distributed model work
+  begins, so both ranks use the same code and model payload;
+- tensor-parallel model loading and coordinated standalone export, with both
+  ranks participating in the final artifact;
+- Laguna FP8 support through the native Transformers loader, a pinned trusted
+  model-code path, and FP8-preserving export; and
+- clearer rank failure diagnostics and the upstream FP8 tensor-parallel fix.
+
+The two-node workflow completed full model runs for the supported Laguna FP8
+path and a distributed fixture. The exporter preserves non-target tensor bytes
+and source FP8 tensors; it changes only the selected BF16 ablation targets.
+Performance remains under further testing, and this release makes no new
+throughput claim.
+
 Heretic supports most dense models, including many multimodal models,
 several different MoE architectures, and even some hybrid models like Qwen3.5.
 Pure state-space models and certain other research architectures are not yet
@@ -135,8 +159,8 @@ the repository. On the coordinator, run with explicit cluster, application
 configuration, and model paths:
 
 ```sh
-/home/cb/src/heretic-dgx-rebuild/.venv/bin/heretic \
-  --cluster /home/cb/.config/heretic/cluster.toml \
+heretic \
+  --cluster /path/to/cluster.toml \
   --config /absolute/path/to/heretic-run.toml \
   --model /absolute/path/to/model
 ```
